@@ -21,23 +21,14 @@ namespace RMA.Server.Entities
         [FirestoreProperty]
         public string CustomerId { get; set; } = string.Empty;
 
-        [ForeignKey(nameof(CustomerId))]
-        public Customer Customer { get; set; } = null!;
-
         [Required]
         [FirestoreProperty]
         public string ModelId { get; set; } = string.Empty;
-
-        [ForeignKey(nameof(ModelId))]
-        public Model Model { get; set; } = null!;
 
         [FirestoreProperty]
         public DateTime? PurchaseDate { get; set; }
 
         [FirestoreProperty]
         public DateTime? WarrantyExpiry { get; set; }
-
-        // Navigation properties
-        public ICollection<RmaTicket> RmaTickets { get; set; } = new List<RmaTicket>();
     }
 }

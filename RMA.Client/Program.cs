@@ -19,6 +19,7 @@ builder.Services.AddScoped<AuthenticationStateProvider, MockAuthStateProvider>()
 
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<DeviceService>();
-builder.Services.AddScoped<RmaTicketService>();
+builder.Services.AddScoped<IRmaTicketService, RmaTicketService>();
+builder.Services.AddScoped<ReferenceDataService>();
 
 await builder.Build().RunAsync();

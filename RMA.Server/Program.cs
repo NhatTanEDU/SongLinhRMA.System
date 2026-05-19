@@ -60,7 +60,24 @@ builder.Services.AddCors(options =>
 });
 
 // Initialize Firestore
-Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", "serviceAccountKey.json");
+var credentialPath = builder.Configuration["Firebase:ServiceAccountKeyPath"] ?? "serviceAccountKey.json";
+if (!File.Exists(credentialPath))
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine("==========================================================================");
+    Console.WriteLine("❌ LỖI KHỞI ĐỘNG: Không tìm thấy file credentials 'serviceAccountKey.json'!");
+    Console.WriteLine($"Vị trí cần đặt file: {Path.GetFullPath(credentialPath)}");
+    Console.WriteLine("--------------------------------------------------------------------------");
+    Console.WriteLine("HƯỚNG DẪN LẤY FILE:");
+    Console.WriteLine("1. Truy cập Firebase Console: https://console.firebase.google.com/");
+    Console.WriteLine("2. Vào Cài đặt dự án (Project Settings) -> Tài khoản dịch vụ (Service Accounts).");
+    Console.WriteLine("3. Nhấp chọn 'Tạo khóa riêng tư mới' (Generate new private key) để tải file JSON về.");
+    Console.WriteLine("4. Đổi tên file đã tải thành 'serviceAccountKey.json' và đặt vào thư mục RMA.Server.");
+    Console.WriteLine("==========================================================================");
+    Console.ResetColor();
+}
+
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", credentialPath);
 var firestoreDb = FirestoreDb.Create(projectId);
 builder.Services.AddSingleton(firestoreDb);
 
@@ -72,6 +89,7 @@ builder.Services.AddScoped<FirestoreRepository<Model>>(provider => new Firestore
 builder.Services.AddScoped<FirestoreRepository<Category>>(provider => new FirestoreRepository<Category>(provider.GetRequiredService<FirestoreDb>(), "categories"));
 builder.Services.AddScoped<FirestoreRepository<StatusMaster>>(provider => new FirestoreRepository<StatusMaster>(provider.GetRequiredService<FirestoreDb>(), "status_masters"));
 builder.Services.AddScoped<FirestoreRepository<Location>>(provider => new FirestoreRepository<Location>(provider.GetRequiredService<FirestoreDb>(), "locations"));
+builder.Services.AddScoped<FirestoreRepository<RmaTicket>>(provider => new FirestoreRepository<RmaTicket>(provider.GetRequiredService<FirestoreDb>(), "rma_tickets"));
 
 // Firebase Cloud Messaging (FCM)
 builder.Services.AddSingleton<IFcmService, FcmService>();

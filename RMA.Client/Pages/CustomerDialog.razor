@@ -1,33 +1,141 @@
 @using RMA.Shared.DTOs
-@inject ISnackbar Snackbar
 
 <MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-3">
+            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" />
+            <MudText Typo="Typo.h6"><b>Thêm Khách Hàng Mới</b></MudText>
+        </div>
+    </TitleContent>
     <DialogContent>
-        <MudForm @ref="form" @bind-IsValid="@success">
-            <MudTextField @bind-Value="Customer.Name" Label="Tên khách hàng" Required="true" RequiredError="Tên là bắt buộc!" />
-            <MudTextField @bind-Value="Customer.Phone" Label="Số điện thoại" />
-            <MudTextField @bind-Value="Customer.Email" Label="Email" />
-            <MudTextField @bind-Value="Customer.Address" Label="Địa chỉ" />
+        <MudForm @ref="_form" @bind-IsValid="_valid">
+            <MudGrid Spacing="3">
+
+                <!-- Avatar Upload Area -->
+                <MudItem xs="12" Class="d-flex flex-column align-center">
+                    <div @onclick="TriggerAvatarClick"
+                         style="width:90px;height:90px;border-radius:50%;border:2.5px dashed #667eea;
+                                background:rgba(102,126,234,0.06);cursor:pointer;
+                                display:flex;align-items:center;justify-content:center;
+                                transition:all 0.2s;position:relative;overflow:hidden;">
+                        @if (!string.IsNullOrEmpty(_avatarPreview))
+                        {
+                            <img src="@_avatarPreview" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-column align-center">
+                                <MudIcon Icon="@Icons.Material.Filled.AddAPhoto" Style="color:#667eea;font-size:2rem;" />
+                                <MudText Typo="Typo.caption" Style="color:#667eea;font-size:0.65rem;">Ảnh đại diện</MudText>
+                            </div>
+                        }
+                    </div>
+                    <InputFile id="avatarInput" OnChange="OnAvatarSelected" accept="image/*" style="display:none;" />
+                    @if (!string.IsNullOrEmpty(_avatarPreview))
+                    {
+                        <MudButton Size="Size.Small" Color="Color.Error" Variant="Variant.Text"
+                                   Class="mt-1" OnClick="@(() => { _avatarPreview = ""; Customer.AvatarUrl = null; })">
+                            Xóa ảnh
+                        </MudButton>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.caption" Color="Color.Secondary" Class="mt-1">
+                            Nhấp để tải ảnh hoặc kéo thả
+                        </MudText>
+                    }
+                </MudItem>
+
+                <MudItem xs="12">
+                    <MudDivider />
+                </MudItem>
+
+                <!-- Tên KH (bắt buộc) -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Customer.Name"
+                                  Label="Tên Khách Hàng / Công ty *"
+                                  Placeholder="VD: PMC, VSP, PVOIL, Nguyễn Văn A..."
+                                  Variant="Variant.Outlined"
+                                  Required="true" RequiredError="Tên khách hàng là bắt buộc!"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Business" />
+                </MudItem>
+
+                <!-- Phone + Email -->
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Customer.Phone"
+                                  Label="Số điện thoại"
+                                  Placeholder="0901 234 567"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Telephone"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Phone" />
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Customer.Email"
+                                  Label="Email"
+                                  Placeholder="contact@company.com"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Email"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Email" />
+                </MudItem>
+
+                <!-- Địa chỉ -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Customer.Address"
+                                  Label="Địa chỉ"
+                                  Placeholder="Số nhà, đường, quận/huyện, tỉnh/thành..."
+                                  Variant="Variant.Outlined"
+                                  Lines="2"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.LocationOn" />
+                </MudItem>
+
+            </MudGrid>
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Hủy</MudButton>
-        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(!success)">Lưu</MudButton>
+        <MudButton OnClick="Cancel" StartIcon="@Icons.Material.Filled.Close">Hủy</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="Submit" Disabled="@(!_valid)">
+            Lưu & Chọn Khách Hàng
+        </MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
-    public CustomerCreateDto Customer { get; set; } = new CustomerCreateDto();
+    [Parameter] public CustomerCreateDto Customer { get; set; } = new();
 
-    bool success;
-    MudForm form = null!;
+    MudForm _form = null!;
+    bool _valid;
+    string _avatarPreview = "";
 
-    void Submit()
+    void TriggerAvatarClick()
     {
-        form.Validate();
-        if (form.IsValid)
+        // JS interop not needed - InputFile with id handles it
+    }
+
+    async Task OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+
+        // Read as base64 for preview
+        var buffer = new byte[file.Size];
+        await file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024).ReadAsync(buffer);
+        var base64 = Convert.ToBase64String(buffer);
+        _avatarPreview = $"data:{file.ContentType};base64,{base64}";
+        Customer.AvatarUrl = _avatarPreview;
+    }
+
+    async Task Submit()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
         {
             MudDialog.Close(DialogResult.Ok(Customer));
         }

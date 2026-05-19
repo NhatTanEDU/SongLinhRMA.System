@@ -20,9 +20,9 @@
     bool success;
     MudForm form = null!;
 
-    void Submit()
+    async Task Submit()
     {
-        form.Validate();
+        await form.ValidateAsync();
         if (form.IsValid)
         {
             MudDialog.Close(DialogResult.Ok(Vendor));

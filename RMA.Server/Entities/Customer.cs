@@ -35,8 +35,5 @@ namespace RMA.Server.Entities
         [FirestoreProperty]
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Navigation properties
-        public ICollection<Device> Devices { get; set; } = new List<Device>();
-        public ICollection<RmaTicket> RmaTickets { get; set; } = new List<RmaTicket>();
     }
 }

@@ -25,6 +25,22 @@ public class ReferenceDataController : ControllerBase
     public async Task<ActionResult<IEnumerable<VendorDto>>> GetVendors()
     {
         var vendors = await _vendorRepo.GetAllAsync();
+        if (!vendors.Any())
+        {
+            var defaults = new List<Vendor>
+            {
+                new() { Name = "Apple Service" },
+                new() { Name = "Dell Service" },
+                new() { Name = "Asus Service" },
+                new() { Name = "HP Service" }
+            };
+            foreach (var v in defaults)
+            {
+                v.Id = await _vendorRepo.AddAsync(v);
+            }
+            vendors = defaults;
+        }
+
         var dtos = vendors.Select(v => new VendorDto
         {
             Id = v.Id,
@@ -62,6 +78,21 @@ public class ReferenceDataController : ControllerBase
     public async Task<ActionResult<IEnumerable<ModelDto>>> GetModels()
     {
         var models = await _modelRepo.GetAllAsync();
+        if (!models.Any())
+        {
+            var defaults = new List<Model>
+            {
+                new() { ModelName = "Dell XPS 15", Brand = "Dell", CategoryId = "1" },
+                new() { ModelName = "MacBook Pro 14", Brand = "Apple", CategoryId = "1" },
+                new() { ModelName = "Asus ROG G14", Brand = "Asus", CategoryId = "1" }
+            };
+            foreach (var m in defaults)
+            {
+                m.Id = await _modelRepo.AddAsync(m);
+            }
+            models = defaults;
+        }
+
         var dtos = models.Select(m => new ModelDto
         {
             Id = m.Id,

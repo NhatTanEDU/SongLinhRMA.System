@@ -82,8 +82,8 @@ public class DevicesController : ControllerBase
             SerialNumber = dto.SerialNumber,
             CustomerId = dto.CustomerId,
             ModelId = dto.ModelId,
-            PurchaseDate = dto.PurchaseDate,
-            WarrantyExpiry = dto.WarrantyExpiry
+            PurchaseDate = dto.PurchaseDate.HasValue ? DateTime.SpecifyKind(dto.PurchaseDate.Value, DateTimeKind.Utc) : null,
+            WarrantyExpiry = dto.WarrantyExpiry.HasValue ? DateTime.SpecifyKind(dto.WarrantyExpiry.Value, DateTimeKind.Utc) : null
         };
         var newId = await _deviceRepo.AddAsync(entity);
         entity.Id = newId;
@@ -100,8 +100,8 @@ public class DevicesController : ControllerBase
         entity.SerialNumber = dto.SerialNumber;
         entity.CustomerId = dto.CustomerId;
         entity.ModelId = dto.ModelId;
-        entity.PurchaseDate = dto.PurchaseDate;
-        entity.WarrantyExpiry = dto.WarrantyExpiry;
+        entity.PurchaseDate = dto.PurchaseDate.HasValue ? DateTime.SpecifyKind(dto.PurchaseDate.Value, DateTimeKind.Utc) : null;
+        entity.WarrantyExpiry = dto.WarrantyExpiry.HasValue ? DateTime.SpecifyKind(dto.WarrantyExpiry.Value, DateTimeKind.Utc) : null;
 
         await _deviceRepo.UpdateAsync(id, entity);
         return NoContent();

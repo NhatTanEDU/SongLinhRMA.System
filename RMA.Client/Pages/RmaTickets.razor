@@ -1,63 +1,70 @@
 @page "/tickets"
-@inject RMA.Client.Services.RmaTicketService TicketService
+@inject RMA.Client.Services.IRmaTicketService TicketService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
-<MudText Typo="Typo.h3" GutterBottom="true">RMA Tickets</MudText>
+<MudText Typo="Typo.h3" GutterBottom="true">Quản lý RMA Tickets</MudText>
 
 <MudTable Items="@tickets" Dense="true" Hover="true" Striped="true" Filter="new Func<RmaTicketDto,bool>(FilterFunc)" @bind-SelectedItem="selectedItem">
     <ToolBarContent>
-        <MudText Typo="Typo.h6">Ticket List</MudText>
+        <MudText Typo="Typo.h6">Danh sách RMA Tickets</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateDialog" Class="ml-4" StartIcon="@Icons.Material.Filled.Add">Tạo Ticket</MudButton>
         <MudSpacer />
-        <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        <MudTextField @bind-Value="searchString" Placeholder="Tìm kiếm..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
     </ToolBarContent>
     <HeaderContent>
         <MudTh>ID</MudTh>
-        <MudTh>Customer</MudTh>
-        <MudTh>Device (Model - Serial)</MudTh>
-        <MudTh>Vendor</MudTh>
-        <MudTh>Problem</MudTh>
-        <MudTh>Status</MudTh>
-        <MudTh>Note</MudTh>
-        <MudTh>Date</MudTh>
+        <MudTh>Khách hàng</MudTh>
+        <MudTh>Thiết bị (Model - Serial)</MudTh>
+        <MudTh>Nhà cung cấp/Hãng</MudTh>
+        <MudTh>Mô tả lỗi</MudTh>
+        <MudTh>Trạng thái</MudTh>
+        <MudTh>Ghi chú</MudTh>
+        <MudTh>Ngày nhận</MudTh>
+        <MudTh Style="text-align: right">Thao tác</MudTh>
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="ID">@context.Id</MudTd>
-        <MudTd DataLabel="Customer">
+        <MudTd DataLabel="Khách hàng">
             <MudText Typo="Typo.body2">@context.CustomerName</MudText>
             @if(!string.IsNullOrEmpty(context.CustomerPhone)){
                 <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CustomerPhone</MudText>
             }
         </MudTd>
-        <MudTd DataLabel="Device">
+        <MudTd DataLabel="Thiết bị">
             <MudText Typo="Typo.body2">@context.DeviceModelName</MudText>
             <MudText Typo="Typo.caption" Color="Color.Secondary">@context.DeviceSerialNumber</MudText>
         </MudTd>
-        <MudTd DataLabel="Vendor">@context.VendorName</MudTd>
-        <MudTd DataLabel="Problem">
+        <MudTd DataLabel="Nhà cung cấp/Hãng">@context.VendorName</MudTd>
+        <MudTd DataLabel="Mô tả lỗi">
             <MudTooltip Text="@context.ProblemDescription">
                 <div style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     @context.ProblemDescription
                 </div>
             </MudTooltip>
         </MudTd>
-        <MudTd DataLabel="Status">
+        <MudTd DataLabel="Trạng thái">
             <MudChip T="string" Color="GetStatusColor(context.StatusName)" Size="Size.Small">@context.StatusName</MudChip>
             @if(context.IsUrgent) {
-                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Urgent</MudChip>
+                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Gấp</MudChip>
             }
         </MudTd>
-        <MudTd DataLabel="Note">
+        <MudTd DataLabel="Ghi chú">
             <MudTooltip Text="@context.StaffNote">
                 <div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                     @context.StaffNote
                 </div>
             </MudTooltip>
         </MudTd>
-        <MudTd DataLabel="Date">
-            <MudText Typo="Typo.body2">Received: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
+        <MudTd DataLabel="Ngày nhận">
+            <MudText Typo="Typo.body2">Nhận: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
             @if(context.SentDate.HasValue){
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Sent: @context.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">Gửi: @context.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
             }
+        </MudTd>
+        <MudTd DataLabel="Thao tác" Style="text-align: right; white-space: nowrap;">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenEditDialog(context))" />
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteTicket(context.Id))" />
         </MudTd>
     </RowTemplate>
     <PagerContent>
@@ -78,6 +85,92 @@
     private async Task LoadData()
     {
         tickets = await TicketService.GetRmaTicketsAsync();
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            ["Ticket"] = new RmaTicketDto()
+        };
+
+        var dialog = await DialogService.ShowAsync<RmaTicketDialog>("Tạo RMA Ticket Mới", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is RmaTicketDto newTicket)
+        {
+            var created = await TicketService.CreateRmaTicketAsync(newTicket);
+            if (created != null)
+            {
+                Snackbar.Add("Tạo RMA Ticket thành công!", Severity.Success);
+                await LoadData();
+            }
+        }
+    }
+
+    private async Task OpenEditDialog(RmaTicketDto ticket)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        
+        // Deep copy of DTO
+        var ticketCopy = new RmaTicketDto
+        {
+            Id = ticket.Id,
+            DeviceId = ticket.DeviceId,
+            DeviceSerialNumber = ticket.DeviceSerialNumber,
+            DeviceModelName = ticket.DeviceModelName,
+            CustomerId = ticket.CustomerId,
+            CustomerName = ticket.CustomerName,
+            CustomerPhone = ticket.CustomerPhone,
+            StatusId = ticket.StatusId,
+            StatusName = ticket.StatusName,
+            StatusColorCode = ticket.StatusColorCode,
+            VendorId = ticket.VendorId,
+            VendorName = ticket.VendorName,
+            ProblemDescription = ticket.ProblemDescription,
+            ServiceMode = ticket.ServiceMode,
+            ReceivedDate = ticket.ReceivedDate,
+            SentDate = ticket.SentDate,
+            IsUrgent = ticket.IsUrgent,
+            StaffNote = ticket.StaffNote
+        };
+
+        var parameters = new DialogParameters
+        {
+            ["Ticket"] = ticketCopy
+        };
+
+        var dialog = await DialogService.ShowAsync<RmaTicketDialog>("Cập nhật RMA Ticket", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is RmaTicketDto updatedTicket)
+        {
+            var success = await TicketService.UpdateRmaTicketAsync(updatedTicket.Id, updatedTicket);
+            if (success)
+            {
+                Snackbar.Add("Cập nhật RMA Ticket thành công!", Severity.Success);
+                await LoadData();
+            }
+        }
+    }
+
+    private async Task DeleteTicket(string id)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận xóa", 
+            "Bạn có chắc chắn muốn xóa Ticket này không?", 
+            yesText: "Xóa", cancelText: "Hủy");
+
+        if (confirm == true)
+        {
+            var success = await TicketService.DeleteRmaTicketAsync(id);
+            if (success)
+            {
+                Snackbar.Add("Xóa RMA Ticket thành công!", Severity.Success);
+                await LoadData();
+            }
+        }
     }
 
     private bool FilterFunc(RmaTicketDto element)

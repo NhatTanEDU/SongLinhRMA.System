@@ -65,6 +65,7 @@ public class RmaTicketsController : ControllerBase
                 CustomerId = t.CustomerId,
                 CustomerName = customer?.Name ?? string.Empty,
                 CustomerPhone = customer?.Phone,
+                CustomerAvatarUrl = customer?.AvatarUrl,
                 
                 StatusId = t.StatusId,
                 StatusName = status?.StatusName ?? string.Empty,
@@ -131,6 +132,7 @@ public class RmaTicketsController : ControllerBase
             CustomerId = t.CustomerId,
             CustomerName = customer?.Name ?? string.Empty,
             CustomerPhone = customer?.Phone,
+            CustomerAvatarUrl = customer?.AvatarUrl,
             
             StatusId = t.StatusId,
             StatusName = status?.StatusName ?? string.Empty,

@@ -3,8 +3,8 @@
 <MudDialog>
     <TitleContent>
         <div class="d-flex align-center gap-3">
-            <MudIcon Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" />
-            <MudText Typo="Typo.h6"><b>Thêm Khách Hàng Mới</b></MudText>
+            <MudIcon Icon="@(IsEdit ? Icons.Material.Filled.Edit : Icons.Material.Filled.PersonAdd)" Color="Color.Primary" />
+            <MudText Typo="Typo.h6"><b>@(IsEdit ? "Chỉnh Sửa Khách Hàng" : "Thêm Khách Hàng Mới")</b></MudText>
         </div>
     </TitleContent>
     <DialogContent>
@@ -13,11 +13,11 @@
 
                 <!-- Avatar Upload Area -->
                 <MudItem xs="12" Class="d-flex flex-column align-center">
-                    <div @onclick="TriggerAvatarClick"
+                    <label for="avatarInput"
                          style="width:90px;height:90px;border-radius:50%;border:2.5px dashed #667eea;
                                 background:rgba(102,126,234,0.06);cursor:pointer;
                                 display:flex;align-items:center;justify-content:center;
-                                transition:all 0.2s;position:relative;overflow:hidden;">
+                                transition:all 0.2s;position:relative;overflow:hidden;margin:0;">
                         @if (!string.IsNullOrEmpty(_avatarPreview))
                         {
                             <img src="@_avatarPreview" style="width:100%;height:100%;object-fit:cover;border-radius:50%;" />
@@ -29,7 +29,7 @@
                                 <MudText Typo="Typo.caption" Style="color:#667eea;font-size:0.65rem;">Ảnh đại diện</MudText>
                             </div>
                         }
-                    </div>
+                    </label>
                     <InputFile id="avatarInput" OnChange="OnAvatarSelected" accept="image/*" style="display:none;" />
                     @if (!string.IsNullOrEmpty(_avatarPreview))
                     {
@@ -98,9 +98,9 @@
     <DialogActions>
         <MudButton OnClick="Cancel" StartIcon="@Icons.Material.Filled.Close">Hủy</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled"
-                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   StartIcon="@(IsEdit ? Icons.Material.Filled.Save : Icons.Material.Filled.PersonAdd)"
                    OnClick="Submit" Disabled="@(!_valid)">
-            Lưu & Chọn Khách Hàng
+            @(IsEdit ? "Lưu Cập Nhật" : "Lưu & Chọn Khách Hàng")
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -109,15 +109,21 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
 
     [Parameter] public CustomerCreateDto Customer { get; set; } = new();
+    [Parameter] public bool IsEdit { get; set; } = false;
 
     MudForm _form = null!;
     bool _valid;
     string _avatarPreview = "";
 
-    void TriggerAvatarClick()
+    protected override void OnInitialized()
     {
-        // JS interop not needed - InputFile with id handles it
+        if (IsEdit && !string.IsNullOrEmpty(Customer.AvatarUrl))
+        {
+            _avatarPreview = Customer.AvatarUrl;
+        }
     }
+
+
 
     async Task OnAvatarSelected(InputFileChangeEventArgs e)
     {

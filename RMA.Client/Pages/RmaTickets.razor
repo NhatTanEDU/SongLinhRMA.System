@@ -5,37 +5,52 @@
 
 <MudText Typo="Typo.h3" GutterBottom="true">Quản lý RMA Tickets</MudText>
 
-<MudTable Items="@tickets" Dense="true" Hover="true" Striped="true" Filter="new Func<RmaTicketDto,bool>(FilterFunc)" @bind-SelectedItem="selectedItem">
+<MudTable Items="@tickets" Dense="false" Hover="true" Striped="false" Outlined="true" Elevation="2" Class="rounded-lg" Breakpoint="Breakpoint.Sm" Filter="new Func<RmaTicketDto,bool>(FilterFunc)" @bind-SelectedItem="selectedItem">
     <ToolBarContent>
-        <MudText Typo="Typo.h6">Danh sách RMA Tickets</MudText>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateDialog" Class="ml-4" StartIcon="@Icons.Material.Filled.Add">Tạo Ticket</MudButton>
+        <MudText Typo="Typo.h6" Class="fw-bold">Danh sách RMA Tickets</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateDialog" Class="ml-4 rounded-lg" StartIcon="@Icons.Material.Filled.Add">Tạo Ticket</MudButton>
         <MudSpacer />
-        <MudTextField @bind-Value="searchString" Placeholder="Tìm kiếm..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+        <MudTextField @bind-Value="searchString" Placeholder="Tìm kiếm..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined"></MudTextField>
     </ToolBarContent>
     <HeaderContent>
-        <MudTh>ID</MudTh>
-        <MudTh>Khách hàng</MudTh>
-        <MudTh>Thiết bị (Model - Serial)</MudTh>
-        <MudTh>Nhà cung cấp/Hãng</MudTh>
-        <MudTh>Mô tả lỗi</MudTh>
-        <MudTh>Trạng thái</MudTh>
-        <MudTh>Ghi chú</MudTh>
-        <MudTh>Ngày nhận</MudTh>
-        <MudTh Style="text-align: right">Thao tác</MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">STT</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Khách hàng</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thiết bị</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Hãng</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Mô tả lỗi</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Trạng thái</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Ngày nhận</MudText></MudTh>
+        <MudTh Style="text-align: right"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd DataLabel="ID">@context.Id</MudTd>
+        <MudTd DataLabel="STT">@(tickets.IndexOf(context) + 1)</MudTd>
         <MudTd DataLabel="Khách hàng">
-            <MudText Typo="Typo.body2">@context.CustomerName</MudText>
-            @if(!string.IsNullOrEmpty(context.CustomerPhone)){
-                <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CustomerPhone</MudText>
-            }
+            <div class="d-flex align-center gap-3">
+                @if (!string.IsNullOrEmpty(context.CustomerAvatarUrl))
+                {
+                    <MudAvatar Size="Size.Medium" Class="elevation-1">
+                        <img src="@context.CustomerAvatarUrl" style="width:100%; height:100%; object-fit:cover;" />
+                    </MudAvatar>
+                }
+                else
+                {
+                    <MudAvatar Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Class="elevation-1">
+                        @(!string.IsNullOrEmpty(context.CustomerName) ? context.CustomerName.Substring(0, 1).ToUpper() : "?")
+                    </MudAvatar>
+                }
+                <div>
+                    <MudText Typo="Typo.body2" Class="fw-bold">@context.CustomerName</MudText>
+                    @if(!string.IsNullOrEmpty(context.CustomerPhone)){
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CustomerPhone</MudText>
+                    }
+                </div>
+            </div>
         </MudTd>
         <MudTd DataLabel="Thiết bị">
-            <MudText Typo="Typo.body2">@context.DeviceModelName</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">@context.DeviceSerialNumber</MudText>
+            <MudText Typo="Typo.body2" Class="fw-bold">@context.DeviceModelName</MudText>
+            <MudText Typo="Typo.caption" Color="Color.Secondary">SN: @context.DeviceSerialNumber</MudText>
         </MudTd>
-        <MudTd DataLabel="Nhà cung cấp/Hãng">@context.VendorName</MudTd>
+        <MudTd DataLabel="Hãng">@context.VendorName</MudTd>
         <MudTd DataLabel="Mô tả lỗi">
             <MudTooltip Text="@context.ProblemDescription">
                 <div style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
@@ -49,22 +64,19 @@
                 <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Gấp</MudChip>
             }
         </MudTd>
-        <MudTd DataLabel="Ghi chú">
-            <MudTooltip Text="@context.StaffNote">
-                <div style="max-width: 200px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    @context.StaffNote
-                </div>
-            </MudTooltip>
-        </MudTd>
         <MudTd DataLabel="Ngày nhận">
-            <MudText Typo="Typo.body2">Nhận: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
+            <MudText Typo="Typo.body2">N: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
             @if(context.SentDate.HasValue){
-                <MudText Typo="Typo.caption" Color="Color.Secondary">Gửi: @context.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
+                <MudText Typo="Typo.caption" Color="Color.Secondary">G: @context.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
             }
         </MudTd>
         <MudTd DataLabel="Thao tác" Style="text-align: right; white-space: nowrap;">
-            <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenEditDialog(context))" />
-            <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteTicket(context.Id))" />
+            <MudTooltip Text="Chỉnh sửa">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Info" OnClick="@(() => OpenEditDialog(context))" />
+            </MudTooltip>
+            <MudTooltip Text="Xóa">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteTicket(context.Id))" />
+            </MudTooltip>
         </MudTd>
     </RowTemplate>
     <PagerContent>

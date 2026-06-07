@@ -10,8 +10,11 @@
     <PackageReference Include="CsvHelper" Version="33.1.0" />
     <PackageReference Include="FirebaseAdmin" Version="3.1.0" />
     <PackageReference Include="Google.Cloud.Firestore" Version="3.6.0" />
+    <PackageReference Include="Google.Cloud.Vision.V1" Version="3.8.0" />
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+    <PackageReference Include="Tesseract" Version="5.2.0" />
+    <PackageReference Include="ZXing.Net.Bindings.ImageSharp.V3" Version="0.16.18" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,6 +25,7 @@
     <Content Update="serviceAccountKey.json" Condition="Exists('serviceAccountKey.json')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <None Update="tessdata/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

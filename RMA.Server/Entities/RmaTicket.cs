@@ -48,5 +48,9 @@ namespace RMA.Server.Entities
         [MaxLength(2000)]
         [FirestoreProperty]
         public string? StaffNote { get; set; }
+
+        [MaxLength(500)]
+        [FirestoreProperty]
+        public string? EndUserName { get; set; }
     }
 }

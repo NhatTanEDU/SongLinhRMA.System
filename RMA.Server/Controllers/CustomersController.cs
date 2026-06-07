@@ -28,6 +28,7 @@ public class CustomersController : ControllerBase
         {
             Id = c.Id,
             Name = c.Name,
+            ContactPerson = c.ContactPerson,
             Phone = c.Phone,
             Email = c.Email,
             Address = c.Address,
@@ -46,6 +47,7 @@ public class CustomersController : ControllerBase
         {
             Id = c.Id,
             Name = c.Name,
+            ContactPerson = c.ContactPerson,
             Phone = c.Phone,
             Email = c.Email,
             Address = c.Address,
@@ -60,6 +62,7 @@ public class CustomersController : ControllerBase
         var entity = new Customer
         {
             Name = dto.Name,
+            ContactPerson = dto.ContactPerson,
             Phone = dto.Phone,
             Email = dto.Email,
             Address = dto.Address,
@@ -72,6 +75,7 @@ public class CustomersController : ControllerBase
         {
             Id = entity.Id,
             Name = entity.Name,
+            ContactPerson = entity.ContactPerson,
             Phone = entity.Phone,
             Email = entity.Email,
             Address = entity.Address,
@@ -86,6 +90,7 @@ public class CustomersController : ControllerBase
         if (entity == null) return NotFound();
 
         entity.Name = dto.Name;
+        entity.ContactPerson = dto.ContactPerson;
         entity.Phone = dto.Phone;
         entity.Email = dto.Email;
         entity.Address = dto.Address;

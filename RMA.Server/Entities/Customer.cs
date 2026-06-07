@@ -16,6 +16,10 @@ namespace RMA.Server.Entities
         [FirestoreProperty]
         public string Name { get; set; } = string.Empty;
 
+        [MaxLength(255)]
+        [FirestoreProperty]
+        public string? ContactPerson { get; set; }
+
         [MaxLength(20)]
         [FirestoreProperty]
         public string? Phone { get; set; }

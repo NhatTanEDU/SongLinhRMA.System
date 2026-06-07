@@ -15,11 +15,11 @@
         <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
     </ToolBarContent>
     <HeaderContent>
-        <MudTh>ID</MudTh>
+        <MudTh>STT</MudTh>
         <MudTh>Tên Hãng</MudTh>
     </HeaderContent>
     <RowTemplate>
-        <MudTd DataLabel="ID">@context.Id</MudTd>
+        <MudTd DataLabel="STT">@(vendors.IndexOf(context) + 1)</MudTd>
         <MudTd DataLabel="Tên Hãng">@context.Name</MudTd>
     </RowTemplate>
     <PagerContent>

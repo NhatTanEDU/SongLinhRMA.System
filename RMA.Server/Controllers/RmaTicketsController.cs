@@ -65,6 +65,7 @@ public class RmaTicketsController : ControllerBase
                 CustomerId = t.CustomerId,
                 CustomerName = customer?.Name ?? string.Empty,
                 CustomerPhone = customer?.Phone,
+                CustomerContactPerson = customer?.ContactPerson,
                 CustomerAvatarUrl = customer?.AvatarUrl,
                 
                 StatusId = t.StatusId,
@@ -79,7 +80,8 @@ public class RmaTicketsController : ControllerBase
                 ReceivedDate = t.ReceivedDate,
                 SentDate = t.SentDate,
                 IsUrgent = t.IsUrgent,
-                StaffNote = t.StaffNote
+                StaffNote = t.StaffNote,
+                EndUserName = t.EndUserName
             };
         });
 
@@ -132,6 +134,7 @@ public class RmaTicketsController : ControllerBase
             CustomerId = t.CustomerId,
             CustomerName = customer?.Name ?? string.Empty,
             CustomerPhone = customer?.Phone,
+            CustomerContactPerson = customer?.ContactPerson,
             CustomerAvatarUrl = customer?.AvatarUrl,
             
             StatusId = t.StatusId,
@@ -146,7 +149,8 @@ public class RmaTicketsController : ControllerBase
             ReceivedDate = t.ReceivedDate,
             SentDate = t.SentDate,
             IsUrgent = t.IsUrgent,
-            StaffNote = t.StaffNote
+            StaffNote = t.StaffNote,
+            EndUserName = t.EndUserName
         };
     }
 
@@ -163,7 +167,8 @@ public class RmaTicketsController : ControllerBase
             ServiceMode = dto.ServiceMode,
             ReceivedDate = DateTime.UtcNow,
             IsUrgent = dto.IsUrgent,
-            StaffNote = dto.StaffNote
+            StaffNote = dto.StaffNote,
+            EndUserName = dto.EndUserName
         };
         var newId = await _ticketRepo.AddAsync(entity);
         entity.Id = newId;
@@ -190,6 +195,7 @@ public class RmaTicketsController : ControllerBase
         entity.ServiceMode = dto.ServiceMode;
         entity.IsUrgent = dto.IsUrgent;
         entity.StaffNote = dto.StaffNote;
+        entity.EndUserName = dto.EndUserName;
 
         await _ticketRepo.UpdateAsync(id, entity);
         return NoContent();

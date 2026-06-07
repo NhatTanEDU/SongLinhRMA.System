@@ -77,7 +77,7 @@ if (!File.Exists(credentialPath))
     Console.ResetColor();
 }
 
-Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", credentialPath);
+Environment.SetEnvironmentVariable("GOOGLE_APPLICATION_CREDENTIALS", Path.GetFullPath(credentialPath));
 var firestoreDb = FirestoreDb.Create(projectId);
 builder.Services.AddSingleton(firestoreDb);
 
@@ -94,6 +94,11 @@ builder.Services.AddScoped<FirestoreRepository<RmaTicket>>(provider => new Fires
 // Firebase Cloud Messaging (FCM)
 builder.Services.AddSingleton<IFcmService, FcmService>();
 builder.Services.AddHostedService<RmaAlertBackgroundService>();
+
+// OCR Service
+builder.Services.AddScoped<GoogleVisionOcrService>();
+builder.Services.AddScoped<TesseractOcrService>();
+builder.Services.AddScoped<IOcrService, BarcodeAndOcrService>();
 
 builder.Services.AddOpenApi();
 

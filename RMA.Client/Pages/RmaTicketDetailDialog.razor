@@ -1,0 +1,293 @@
+@using RMA.Shared.DTOs
+@using RMA.Client.Services
+@inject IRmaTicketService TicketService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center justify-space-between w-100">
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Primary" />
+                <MudText Typo="Typo.h6"><b>Chi tiết Phiếu RMA #@Ticket.Id.Substring(0, Math.Min(8, Ticket.Id.Length))</b></MudText>
+            </div>
+            <MudTooltip Text="@(isEditing ? "Hủy chỉnh sửa" : "Chỉnh sửa tại chỗ")">
+                <MudToggleIconButton @bind-Toggled="isEditing"
+                                     Icon="@Icons.Material.Filled.Edit" Color="Color.Default"
+                                     ToggledIcon="@Icons.Material.Filled.EditOff" ToggledColor="Color.Warning" />
+            </MudTooltip>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudGrid Spacing="3">
+            <!-- Khối 1: Thông tin chung & Định danh -->
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="1" Class="h-100 rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Primary"><b>1. Thông Tin Định Danh</b></MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIcon Icon="@Icons.Material.Filled.Badge" Color="Color.Primary" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="1">
+                            <MudItem xs="12">
+                                <MudTextField Value="@Ticket.CustomerName" Label="Khách hàng (Công ty)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudTextField Value="@Ticket.CustomerContactPerson" Label="Người đại diện" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudTextField Value="@Ticket.CustomerPhone" Label="Số điện thoại" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="Ticket.EndUserName" Label="Người dùng cuối / Phòng ban" ReadOnly="@(!isEditing)" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudTextField Value="@Ticket.DeviceModelName" Label="Model Thiết bị" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudTextField Value="@Ticket.DeviceSerialNumber" Label="Serial Number (S/N)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                @if(isEditing)
+                                {
+                                    <MudSelect T="string" @bind-Value="Ticket.ServiceMode" Label="Chế độ xử lý" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
+                                        <MudSelectItem Value="@("Bảo hành")">Bảo hành</MudSelectItem>
+                                        <MudSelectItem Value="@("Sửa chữa")">Sửa chữa</MudSelectItem>
+                                    </MudSelect>
+                                }
+                                else
+                                {
+                                    <MudTextField Value="@Ticket.ServiceMode" Label="Chế độ xử lý (Dịch vụ)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Khối 2: Tình trạng & Luân chuyển -->
+            <MudItem xs="12" md="6">
+                <MudCard Elevation="1" Class="h-100 rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Secondary"><b>2. Tình Trạng & Luân Chuyển</b></MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Secondary" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="1">
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="Ticket.ProblemDescription" Label="Lỗi khách báo" ReadOnly="@(!isEditing)" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                            </MudItem>
+                            <MudItem xs="12">
+                                <MudTextField @bind-Value="Ticket.StaffNote" Label="Ghi chú nội bộ" ReadOnly="@(!isEditing)" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudTextField Value="@Ticket.ReceivedDate.ToString("dd/MM/yyyy HH:mm")" Label="Ngày nhận máy" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            <MudItem xs="6">
+                                <MudTextField Value="@(Ticket.SentDate?.ToString("dd/MM/yyyy HH:mm") ?? "Chưa gửi")" Label="Ngày gửi hãng/NCC" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            </MudItem>
+                            
+                            <MudItem xs="6">
+                                @if (isEditing)
+                                {
+                                    <MudSelect T="string" @bind-Value="Ticket.StatusId" Label="Trạng thái" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
+                                        @foreach (var s in _statuses)
+                                        {
+                                            <MudSelectItem Value="@s.Id">@s.StatusName</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                }
+                                else
+                                {
+                                    <MudTextField Value="@Ticket.StatusName" Label="Trạng thái" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                }
+                            </MudItem>
+                            
+                            <MudItem xs="6">
+                                @if (isEditing)
+                                {
+                                    <MudTextField @bind-Value="Ticket.VendorName" Label="Đơn vị xử lý" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                }
+                                else
+                                {
+                                    <MudTextField Value="@(string.IsNullOrEmpty(Ticket.VendorName) ? "Nội bộ" : Ticket.VendorName)" Label="Đơn vị xử lý" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                }
+                            </MudItem>
+
+                            <MudItem xs="12" Class="d-flex align-center">
+                                <MudSwitch T="bool" @bind-Value="Ticket.IsUrgent" ReadOnly="@(!isEditing)" Color="Color.Error" Label="Ưu tiên (Khẩn)" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Khối 3: Phụ kiện & Hình ảnh -->
+            <MudItem xs="12">
+                <MudCard Elevation="1" Class="rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Tertiary"><b>3. Phụ Kiện & Hình Ảnh</b></MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIcon Icon="@Icons.Material.Filled.PhotoLibrary" Color="Color.Tertiary" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        <MudGrid Spacing="2">
+                            <MudItem xs="12" md="4">
+                                <MudText Typo="Typo.body2" Class="mb-2 fw-bold">Checklist Phụ kiện nhận kèm:</MudText>
+                                @if (Ticket.Checklists != null && Ticket.Checklists.Any())
+                                {
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @foreach (var item in Ticket.Checklists)
+                                        {
+                                            <MudChip T="string" Color="@(item.IsChecked ? Color.Success : Color.Default)" Variant="Variant.Outlined" Size="Size.Small">
+                                                @(item.IsChecked ? "✓ " : "")@item.ItemName
+                                            </MudChip>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Không có phụ kiện đính kèm được ghi nhận.</MudText>
+                                }
+                            </MudItem>
+                            <MudItem xs="12" md="8">
+                                <MudText Typo="Typo.body2" Class="mb-2 fw-bold">Hình ảnh hiện trạng:</MudText>
+                                @if (Ticket.Attachments != null && Ticket.Attachments.Any())
+                                {
+                                    <div class="d-flex flex-wrap gap-2">
+                                        @foreach (var img in Ticket.Attachments)
+                                        {
+                                            <MudImage Src="@img.FileUrl" Alt="@img.FileName" Elevation="2" Class="rounded-lg" Style="height: 80px; width: 80px; object-fit: cover; cursor: pointer;" />
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Chưa có hình ảnh đính kèm.</MudText>
+                                }
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+
+            <!-- Khối 4: Lịch sử di chuyển (Timeline) -->
+            <MudItem xs="12">
+                <MudCard Elevation="1" Class="rounded-lg">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Info"><b>4. Lịch Sử Trạng Thái (Timeline)</b></MudText>
+                        </CardHeaderContent>
+                        <CardHeaderActions>
+                            <MudIcon Icon="@Icons.Material.Filled.History" Color="Color.Info" />
+                        </CardHeaderActions>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @if (Ticket.StatusHistories != null && Ticket.StatusHistories.Any())
+                        {
+                            <MudTimeline TimelineOrientation="TimelineOrientation.Vertical" TimelinePosition="TimelinePosition.Start">
+                                @foreach (var hist in Ticket.StatusHistories.OrderByDescending(h => h.CreatedAt))
+                                {
+                                    <MudTimelineItem Color="GetStatusColor(hist.StatusName)" Size="Size.Small">
+                                        <ItemOpposite>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@hist.CreatedAt.ToString("dd/MM/yyyy HH:mm")</MudText>
+                                        </ItemOpposite>
+                                        <ItemContent>
+                                            <MudText Typo="Typo.body2" Class="fw-bold">@hist.StatusName</MudText>
+                                            <MudText Typo="Typo.caption">Vị trí: @hist.LocationName</MudText>
+                                            @if (!string.IsNullOrEmpty(hist.Note))
+                                            {
+                                                <MudText Typo="Typo.body2" Class="mt-1">@hist.Note</MudText>
+                                            }
+                                        </ItemContent>
+                                    </MudTimelineItem>
+                                }
+                            </MudTimeline>
+                        }
+                        else
+                        {
+                            <MudText Typo="Typo.caption" Color="Color.Secondary" Class="d-block mt-2">Chưa có lịch sử trạng thái nào.</MudText>
+                        }
+                    </MudCardContent>
+                </MudCard>
+            </MudItem>
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Default" Variant="Variant.Outlined" Class="mr-auto">In Biên Nhận PDF</MudButton>
+        @if (isEditing)
+        {
+            <MudButton StartIcon="@Icons.Material.Filled.Save" Color="Color.Success" Variant="Variant.Filled" Class="mr-2" OnClick="SaveChanges" Disabled="@isSaving">
+                @(isSaving ? "Đang lưu..." : "Lưu thay đổi")
+            </MudButton>
+        }
+        <MudButton OnClick="Close" Variant="Variant.Text">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    
+    [Parameter] public RmaTicketDto Ticket { get; set; } = new();
+
+    private bool isEditing = false;
+    private bool isSaving = false;
+    private List<StatusMasterDto> _statuses = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _statuses = await TicketService.GetStatusesAsync();
+    }
+
+    private async Task SaveChanges()
+    {
+        isSaving = true;
+        
+        // Gắn lại StatusName theo Id vừa chọn (để update local grid cho đẹp)
+        var selectedStatus = _statuses.FirstOrDefault(s => s.Id == Ticket.StatusId);
+        if (selectedStatus != null)
+        {
+            Ticket.StatusName = selectedStatus.StatusName;
+            Ticket.StatusColorCode = selectedStatus.ColorCode;
+        }
+
+        var success = await TicketService.UpdateRmaTicketAsync(Ticket.Id, Ticket);
+        
+        isSaving = false;
+
+        if (success)
+        {
+            Snackbar.Add("Đã lưu thay đổi thành công!", Severity.Success);
+            MudDialog.Close(DialogResult.Ok(Ticket)); // Trả về DTO mới cập nhật
+        }
+        else
+        {
+            Snackbar.Add("Có lỗi xảy ra khi lưu.", Severity.Error);
+        }
+    }
+
+    void Close() => MudDialog.Cancel();
+
+    private Color GetStatusColor(string statusName)
+    {
+        return statusName switch
+        {
+            "New" => Color.Info,
+            "In Progress" => Color.Warning,
+            "Waiting for Parts" => Color.Error,
+            "Repaired" => Color.Success,
+            "Closed" => Color.Default,
+            _ => Color.Default
+        };
+    }
+}

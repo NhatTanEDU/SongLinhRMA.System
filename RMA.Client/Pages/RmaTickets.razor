@@ -40,8 +40,18 @@
                 }
                 <div>
                     <MudText Typo="Typo.body2" Class="fw-bold">@context.CustomerName</MudText>
+                    @if(!string.IsNullOrEmpty(context.CustomerContactPerson)){
+                        <MudText Typo="Typo.caption" Color="Color.Primary" Style="font-weight:600;">
+                            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Style="font-size:0.85rem;vertical-align:middle;" /> ĐD: @context.CustomerContactPerson
+                        </MudText>
+                    }
                     @if(!string.IsNullOrEmpty(context.CustomerPhone)){
                         <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CustomerPhone</MudText>
+                    }
+                    @if(!string.IsNullOrEmpty(context.EndUserName)){
+                        <MudText Typo="Typo.caption" Style="color:#e65100;">
+                            👤 @context.EndUserName
+                        </MudText>
                     }
                 </div>
             </div>
@@ -71,6 +81,9 @@
             }
         </MudTd>
         <MudTd DataLabel="Thao tác" Style="text-align: right; white-space: nowrap;">
+            <MudTooltip Text="Xem chi tiết">
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenDetailDialog(context))" />
+            </MudTooltip>
             <MudTooltip Text="Chỉnh sửa">
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Info" OnClick="@(() => OpenEditDialog(context))" />
             </MudTooltip>
@@ -135,6 +148,7 @@
             CustomerId = ticket.CustomerId,
             CustomerName = ticket.CustomerName,
             CustomerPhone = ticket.CustomerPhone,
+            CustomerContactPerson = ticket.CustomerContactPerson,
             StatusId = ticket.StatusId,
             StatusName = ticket.StatusName,
             StatusColorCode = ticket.StatusColorCode,
@@ -145,7 +159,8 @@
             ReceivedDate = ticket.ReceivedDate,
             SentDate = ticket.SentDate,
             IsUrgent = ticket.IsUrgent,
-            StaffNote = ticket.StaffNote
+            StaffNote = ticket.StaffNote,
+            EndUserName = ticket.EndUserName
         };
 
         var parameters = new DialogParameters
@@ -163,6 +178,53 @@
             {
                 Snackbar.Add("Cập nhật RMA Ticket thành công!", Severity.Success);
                 await LoadData();
+            }
+        }
+    }
+
+    private async Task OpenDetailDialog(RmaTicketDto ticket)
+    {
+        // Deep copy để tránh binding trực tiếp làm thay đổi grid khi chưa bấm Lưu
+        var ticketCopy = new RmaTicketDto
+        {
+            Id = ticket.Id,
+            DeviceId = ticket.DeviceId,
+            DeviceSerialNumber = ticket.DeviceSerialNumber,
+            DeviceModelName = ticket.DeviceModelName,
+            CustomerId = ticket.CustomerId,
+            CustomerName = ticket.CustomerName,
+            CustomerPhone = ticket.CustomerPhone,
+            CustomerContactPerson = ticket.CustomerContactPerson,
+            StatusId = ticket.StatusId,
+            StatusName = ticket.StatusName,
+            StatusColorCode = ticket.StatusColorCode,
+            VendorId = ticket.VendorId,
+            VendorName = ticket.VendorName,
+            ProblemDescription = ticket.ProblemDescription,
+            ServiceMode = ticket.ServiceMode,
+            ReceivedDate = ticket.ReceivedDate,
+            SentDate = ticket.SentDate,
+            IsUrgent = ticket.IsUrgent,
+            StaffNote = ticket.StaffNote,
+            EndUserName = ticket.EndUserName,
+            Attachments = ticket.Attachments,
+            Checklists = ticket.Checklists,
+            StatusHistories = ticket.StatusHistories
+        };
+
+        var parameters = new DialogParameters { ["Ticket"] = ticketCopy };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<RmaTicketDetailDialog>("Chi tiết Phiếu RMA", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is RmaTicketDto updatedTicket)
+        {
+            // Cập nhật tại chỗ (In-place) không fetch lại API
+            var index = tickets.FindIndex(t => t.Id == updatedTicket.Id);
+            if (index != -1)
+            {
+                tickets[index] = updatedTicket;
+                StateHasChanged();
             }
         }
     }
@@ -194,6 +256,10 @@
         if (element.DeviceSerialNumber != null && element.DeviceSerialNumber.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         if (element.StatusName != null && element.StatusName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.EndUserName != null && element.EndUserName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.CustomerContactPerson != null && element.CustomerContactPerson.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         return false;
     }

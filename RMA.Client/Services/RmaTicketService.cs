@@ -35,7 +35,8 @@ public class RmaTicketService : IRmaTicketService
             ProblemDescription = ticket.ProblemDescription,
             ServiceMode = ticket.ServiceMode,
             IsUrgent = ticket.IsUrgent,
-            StaffNote = ticket.StaffNote
+            StaffNote = ticket.StaffNote,
+            EndUserName = ticket.EndUserName
         };
 
         var response = await _http.PostAsJsonAsync("api/rmatickets", createDto);
@@ -57,7 +58,8 @@ public class RmaTicketService : IRmaTicketService
             ProblemDescription = ticket.ProblemDescription,
             ServiceMode = ticket.ServiceMode,
             IsUrgent = ticket.IsUrgent,
-            StaffNote = ticket.StaffNote
+            StaffNote = ticket.StaffNote,
+            EndUserName = ticket.EndUserName
         };
 
         var response = await _http.PutAsJsonAsync($"api/rmatickets/{id}", createDto);

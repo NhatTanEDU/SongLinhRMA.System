@@ -16,6 +16,7 @@
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">STT</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Avatar</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Tên</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Người đại diện</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Email</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Số điện thoại</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Địa chỉ</MudText></MudTh>
@@ -38,6 +39,19 @@
             }
         </MudTd>
         <MudTd DataLabel="Tên"><b>@context.Name</b></MudTd>
+        <MudTd DataLabel="Người đại diện">
+            @if (!string.IsNullOrEmpty(context.ContactPerson))
+            {
+                <div class="d-flex align-center gap-1">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Color="Color.Primary" />
+                    <MudText Typo="Typo.body2">@context.ContactPerson</MudText>
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+            }
+        </MudTd>
         <MudTd DataLabel="Email">@context.Email</MudTd>
         <MudTd DataLabel="Số điện thoại">@context.Phone</MudTd>
         <MudTd DataLabel="Địa chỉ">@context.Address</MudTd>
@@ -98,6 +112,7 @@
         var editModel = new CustomerCreateDto
         {
             Name = customer.Name,
+            ContactPerson = customer.ContactPerson,
             Phone = customer.Phone,
             Email = customer.Email,
             Address = customer.Address,
@@ -155,6 +170,8 @@
         if (element.Email != null && element.Email.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         if (element.Phone != null && element.Phone.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.ContactPerson != null && element.ContactPerson.Contains(searchString, StringComparison.OrdinalIgnoreCase))
             return true;
         return false;
     }

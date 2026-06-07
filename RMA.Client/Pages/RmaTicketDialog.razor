@@ -5,6 +5,7 @@
 @inject RMA.Client.Services.ReferenceDataService ReferenceService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject HttpClient Http
 
 <style>
     .rma-section {
@@ -94,6 +95,32 @@
                                                        OnClick="OpenAddCustomerDialog" />
                                     </MudTooltip>
                                 </div>
+                                @if (!string.IsNullOrEmpty(Ticket.CustomerId))
+                                {
+                                    var selectedCust = _customers.FirstOrDefault(c => c.Id == Ticket.CustomerId);
+                                    @if (selectedCust != null && !string.IsNullOrEmpty(selectedCust.ContactPerson))
+                                    {
+                                        <div class="d-flex align-center gap-2 mt-1 ml-1" style="color:#5b5fc7;">
+                                            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" />
+                                            <MudText Typo="Typo.caption" Style="font-weight:600;">Đại diện: @selectedCust.ContactPerson</MudText>
+                                            @if (!string.IsNullOrEmpty(selectedCust.Phone))
+                                            {
+                                                <MudText Typo="Typo.caption"> — @selectedCust.Phone</MudText>
+                                            }
+                                        </div>
+                                    }
+                                }
+                            </MudItem>
+
+                            <!-- Người dùng cuối / Phòng ban -->
+                            <MudItem xs="12" md="6">
+                                <MudTextField @bind-Value="Ticket.EndUserName"
+                                              Label="Người dùng cuối / Phòng ban (Tùy chọn)"
+                                              Placeholder="VD: Nguyễn Thành Tâm P.TK, Trần Văn B P.KT..."
+                                              Variant="Variant.Outlined"
+                                              HelperText="Ai đang thực sự sử dụng thiết bị này?"
+                                              Adornment="Adornment.Start"
+                                              AdornmentIcon="@Icons.Material.Filled.Badge" />
                             </MudItem>
 
                             <!-- Thiết bị -->
@@ -138,13 +165,15 @@
 
                                         <!-- OCR Scan Button -->
                                         <div class="mt-2">
+                                            <InputFile id="ocrInput" OnChange="UploadImageForOcr" accept="image/*" style="display:none;" />
                                             @if (!_ocrScanning)
                                             {
-                                                <MudButton Variant="Variant.Outlined" Color="Color.Info" FullWidth="true"
-                                                           StartIcon="@Icons.Material.Filled.QrCodeScanner"
-                                                           OnClick="RunOcrScan">
-                                                    📷 Upload Ảnh Mã Vạch để Quét OCR
-                                                </MudButton>
+                                                <div class="w-100">
+                                                    <MudButton HtmlTag="label" for="ocrInput" Variant="Variant.Outlined" Color="Color.Info" FullWidth="true"
+                                                               StartIcon="@Icons.Material.Filled.QrCodeScanner">
+                                                        📷 Upload Ảnh Mã Vạch để Quét OCR
+                                                    </MudButton>
+                                                </div>
                                             }
                                             else
                                             {
@@ -418,15 +447,61 @@
         }
     }
 
-    async Task RunOcrScan()
+    async Task UploadImageForOcr(InputFileChangeEventArgs e)
     {
+        var file = e.File;
+        if (file == null) return;
         _ocrScanning = true;
         StateHasChanged();
-        await Task.Delay(2200);
-        var rnd = new Random();
-        _newDeviceSerial = $"SN-{rnd.Next(10000, 99999)}-{(char)('A' + rnd.Next(26))}{rnd.Next(10, 99)}";
-        _ocrScanning = false;
-        Snackbar.Add($"✅ OCR thành công! S/N: {_newDeviceSerial}", Severity.Success);
+
+        try
+        {
+            using var ms = new MemoryStream();
+            await file.OpenReadStream(10485760).CopyToAsync(ms);
+            var buffer = ms.ToArray();
+            var base64 = Convert.ToBase64String(buffer);
+
+            var response = await Http.PostAsJsonAsync("api/ocr/scan", new OcrRequestDto { Base64Image = base64 });
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<OcrResponseDto>();
+                if (result != null && !string.IsNullOrEmpty(result.SerialNumber))
+                {
+                    _newDeviceSerial = result.SerialNumber;
+                    Snackbar.Add($"✅ OCR thành công! S/N: {_newDeviceSerial}", Severity.Success);
+                }
+                else
+                {
+                    Snackbar.Add("Không nhận diện được Serial Number từ ảnh.", Severity.Warning);
+                }
+            }
+            else
+            {
+                string errorMsg = "Lỗi khi gọi API OCR.";
+                try
+                {
+                    var errorObj = await response.Content.ReadFromJsonAsync<Dictionary<string, string>>();
+                    if (errorObj != null && errorObj.TryGetValue("message", out var msg))
+                    {
+                        errorMsg = msg;
+                    }
+                }
+                catch
+                {
+                    // Fallback to default message if error response is not JSON
+                }
+                Snackbar.Add(errorMsg, Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _ocrScanning = false;
+            StateHasChanged();
+        }
     }
 
     async Task SaveDevice()
@@ -497,6 +572,7 @@
         var cust = _customers.FirstOrDefault(c => c.Id == Ticket.CustomerId);
         Ticket.CustomerName  = cust?.Name ?? "";
         Ticket.CustomerPhone = cust?.Phone;
+        Ticket.CustomerContactPerson = cust?.ContactPerson;
 
         var dev = _allDevices.FirstOrDefault(d => d.Id == Ticket.DeviceId);
         Ticket.DeviceSerialNumber = dev?.SerialNumber ?? "";

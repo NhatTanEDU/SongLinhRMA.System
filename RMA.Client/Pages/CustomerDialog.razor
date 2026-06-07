@@ -61,6 +61,16 @@
                                   AdornmentIcon="@Icons.Material.Filled.Business" />
                 </MudItem>
 
+                <!-- Người đại diện -->
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Customer.ContactPerson"
+                                  Label="Người đại diện (Contact Person)"
+                                  Placeholder="VD: Hồ Thanh Vương, Nguyễn Kim Khải..."
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.PersonPin" />
+                </MudItem>
+
                 <!-- Phone + Email -->
                 <MudItem xs="12" sm="6">
                     <MudTextField @bind-Value="Customer.Phone"
@@ -131,8 +141,9 @@
         if (file == null) return;
 
         // Read as base64 for preview
-        var buffer = new byte[file.Size];
-        await file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024).ReadAsync(buffer);
+        using var ms = new MemoryStream();
+        await file.OpenReadStream(maxAllowedSize: 2 * 1024 * 1024).CopyToAsync(ms);
+        var buffer = ms.ToArray();
         var base64 = Convert.ToBase64String(buffer);
         _avatarPreview = $"data:{file.ContentType};base64,{base64}";
         Customer.AvatarUrl = _avatarPreview;

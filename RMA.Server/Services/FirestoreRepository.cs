@@ -42,6 +42,22 @@ namespace RMA.Server.Services
             return null;
         }
 
+        public async Task<List<T>> GetByFieldAsync(string fieldName, object value)
+        {
+            var collection = _firestoreDb.Collection(_collectionName);
+            var query = collection.WhereEqualTo(fieldName, value);
+            var snapshot = await query.GetSnapshotAsync();
+            var result = new List<T>();
+            foreach (var document in snapshot.Documents)
+            {
+                if (document.Exists)
+                {
+                    result.Add(document.ConvertTo<T>());
+                }
+            }
+            return result;
+        }
+
         public async Task<string> AddAsync(T entity)
         {
             var collection = _firestoreDb.Collection(_collectionName);

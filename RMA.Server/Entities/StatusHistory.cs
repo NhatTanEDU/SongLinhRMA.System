@@ -21,6 +21,9 @@ namespace RMA.Server.Entities
         [FirestoreProperty]
         public string? LocationId { get; set; }
 
+        [FirestoreProperty]
+        public string? StatusId { get; set; }
+
         [ForeignKey(nameof(LocationId))]
         public Location? Location { get; set; }
 

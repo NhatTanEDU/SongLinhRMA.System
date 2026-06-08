@@ -1,0 +1,39 @@
+<style>
+    .img-preview-container {
+        position: relative;
+        padding: 10px;
+        background: #1e1e2e;
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+    }
+    .img-preview-close {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        background: rgba(255,255,255,0.15) !important;
+        color: white !important;
+        backdrop-filter: blur(5px);
+        transition: all 0.2s;
+    }
+    .img-preview-close:hover {
+        background: rgba(255,255,255,0.3) !important;
+        transform: scale(1.05);
+    }
+</style>
+
+<MudDialog Class="rounded-xl overflow-hidden" Style="background: transparent; box-shadow: none;">
+    <DialogContent>
+        <div class="img-preview-container d-flex justify-center align-center">
+            <MudIconButton Icon="@Icons.Material.Filled.Close" Class="img-preview-close" OnClick="Close" />
+            <MudImage Src="@ImageUrl" Style="max-width: 100%; max-height: 80vh; border-radius: 8px; object-fit: contain;" />
+        </div>
+    </DialogContent>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public string ImageUrl { get; set; } = string.Empty;
+
+    void Close() => MudDialog.Close();
+}

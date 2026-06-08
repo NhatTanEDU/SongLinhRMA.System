@@ -19,6 +19,9 @@ public class RmaTicketsController : ControllerBase
     private readonly FirestoreRepository<StatusMaster> _statusRepo;
     private readonly FirestoreRepository<Vendor> _vendorRepo;
     private readonly FirestoreRepository<Model> _modelRepo;
+    private readonly FirestoreRepository<Attachment> _attachmentRepo;
+    private readonly FirestoreRepository<StatusHistory> _statusHistoryRepo;
+    private readonly FirestoreRepository<Location> _locationRepo;
     private readonly IPdfService _pdfService;
 
     public RmaTicketsController(
@@ -28,6 +31,9 @@ public class RmaTicketsController : ControllerBase
         FirestoreRepository<StatusMaster> statusRepo,
         FirestoreRepository<Vendor> vendorRepo,
         FirestoreRepository<Model> modelRepo,
+        FirestoreRepository<Attachment> attachmentRepo,
+        FirestoreRepository<StatusHistory> statusHistoryRepo,
+        FirestoreRepository<Location> locationRepo,
         IPdfService pdfService)
     {
         _ticketRepo = ticketRepo;
@@ -36,6 +42,9 @@ public class RmaTicketsController : ControllerBase
         _statusRepo = statusRepo;
         _vendorRepo = vendorRepo;
         _modelRepo = modelRepo;
+        _attachmentRepo = attachmentRepo;
+        _statusHistoryRepo = statusHistoryRepo;
+        _locationRepo = locationRepo;
         _pdfService = pdfService;
     }
 
@@ -50,6 +59,10 @@ public class RmaTicketsController : ControllerBase
         var vendors = (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
         var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
 
+        var attachmentsGroup = (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        var statusHistoriesGroup = (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        var locations = (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
+
         var dtos = tickets.Select(t =>
         {
             var device = devices.TryGetValue(t.DeviceId, out var d) ? d : null;
@@ -58,7 +71,7 @@ public class RmaTicketsController : ControllerBase
             var vendor = t.VendorId != null && vendors.TryGetValue(t.VendorId, out var v) ? v : null;
             var model = device != null && models.TryGetValue(device.ModelId, out var m) ? m : null;
 
-            return new RmaTicketDto
+            var dto = new RmaTicketDto
             {
                 Id = t.Id,
                 DeviceId = t.DeviceId,
@@ -87,7 +100,38 @@ public class RmaTicketsController : ControllerBase
                 StaffNote = t.StaffNote,
                 EndUserName = t.EndUserName
             };
-        });
+            dto.PopulateChecklistsFromStaffNote();
+
+            if (attachmentsGroup.TryGetValue(t.Id, out var atts))
+            {
+                dto.Attachments = atts.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    FileUrl = a.FileUrl,
+                    FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
+                    UploadedAt = a.UploadedAt
+                }).ToList();
+            }
+
+            if (statusHistoriesGroup.TryGetValue(t.Id, out var shs))
+            {
+                dto.StatusHistories = shs.Select(sh =>
+                {
+                    var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
+                    var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
+                    return new StatusHistoryDto
+                    {
+                        Id = sh.Id,
+                        StatusName = stName,
+                        LocationName = locName,
+                        Note = sh.Note,
+                        CreatedAt = sh.UpdateTime
+                    };
+                }).OrderByDescending(h => h.CreatedAt).ToList();
+            }
+
+            return dto;
+        }).ToList();
 
         return Ok(dtos);
     }
@@ -128,7 +172,12 @@ public class RmaTicketsController : ControllerBase
         var vendor = t.VendorId != null ? await _vendorRepo.GetByIdAsync(t.VendorId) : null;
         var model = device != null ? await _modelRepo.GetByIdAsync(device.ModelId) : null;
 
-        return new RmaTicketDto
+        var attachments = await _attachmentRepo.GetByFieldAsync("RmaTicketId", id);
+        var statusHistories = await _statusHistoryRepo.GetByFieldAsync("RmaTicketId", id);
+        var locations = (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
+        var statuses = (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
+
+        var dto = new RmaTicketDto
         {
             Id = t.Id,
             DeviceId = t.DeviceId,
@@ -157,6 +206,31 @@ public class RmaTicketsController : ControllerBase
             StaffNote = t.StaffNote,
             EndUserName = t.EndUserName
         };
+        dto.PopulateChecklistsFromStaffNote();
+
+        dto.Attachments = attachments.Select(a => new AttachmentDto
+        {
+            Id = a.Id,
+            FileUrl = a.FileUrl,
+            FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
+            UploadedAt = a.UploadedAt
+        }).ToList();
+
+        dto.StatusHistories = statusHistories.Select(sh =>
+        {
+            var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
+            var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
+            return new StatusHistoryDto
+            {
+                Id = sh.Id,
+                StatusName = stName,
+                LocationName = locName,
+                Note = sh.Note,
+                CreatedAt = sh.UpdateTime
+            };
+        }).OrderByDescending(h => h.CreatedAt).ToList();
+
+        return dto;
     }
 
     [HttpPost]
@@ -178,6 +252,26 @@ public class RmaTicketsController : ControllerBase
         var newId = await _ticketRepo.AddAsync(entity);
         entity.Id = newId;
 
+        // Process attachments
+        await ProcessAttachmentsAsync(newId, dto.Attachments);
+
+        // Add initial status history
+        string? locName = ExtractLocationFromStaffNote(dto.StaffNote);
+        string locId = string.Empty;
+        if (!string.IsNullOrEmpty(locName))
+        {
+            locId = await ResolveLocationIdAsync(locName);
+        }
+        var firstHistory = new StatusHistory
+        {
+            RmaTicketId = newId,
+            StatusId = dto.StatusId,
+            LocationId = string.IsNullOrEmpty(locId) ? null : locId,
+            UpdateTime = DateTime.UtcNow,
+            Note = "Tiếp nhận phiếu mới"
+        };
+        await _statusHistoryRepo.AddAsync(firstHistory);
+
         var createdDto = await Get(newId);
         if (createdDto.Result is NotFoundResult)
         {
@@ -192,6 +286,9 @@ public class RmaTicketsController : ControllerBase
         var entity = await _ticketRepo.GetByIdAsync(id);
         if (entity == null) return NotFound();
 
+        var oldStatusId = entity.StatusId;
+        var oldStaffNote = entity.StaffNote;
+
         entity.DeviceId = dto.DeviceId;
         entity.CustomerId = dto.CustomerId;
         entity.StatusId = dto.StatusId;
@@ -203,7 +300,131 @@ public class RmaTicketsController : ControllerBase
         entity.EndUserName = dto.EndUserName;
 
         await _ticketRepo.UpdateAsync(id, entity);
+
+        // Process attachments
+        await ProcessAttachmentsAsync(id, dto.Attachments);
+
+        // Add status history if changed
+        string? newLocName = ExtractLocationFromStaffNote(dto.StaffNote);
+        string? oldLocName = ExtractLocationFromStaffNote(oldStaffNote);
+
+        if (oldStatusId != dto.StatusId || newLocName != oldLocName)
+        {
+            string locId = string.Empty;
+            if (!string.IsNullOrEmpty(newLocName))
+            {
+                locId = await ResolveLocationIdAsync(newLocName);
+            }
+
+            var history = new StatusHistory
+            {
+                RmaTicketId = id,
+                StatusId = dto.StatusId,
+                LocationId = string.IsNullOrEmpty(locId) ? null : locId,
+                UpdateTime = DateTime.UtcNow,
+                Note = oldStatusId != dto.StatusId ? "Thay đổi trạng thái" : "Cập nhật vị trí"
+            };
+            await _statusHistoryRepo.AddAsync(history);
+        }
+
         return NoContent();
+    }
+
+    private async Task ProcessAttachmentsAsync(string ticketId, List<AttachmentDto> attachments)
+    {
+        // 1. Get existing attachments for this ticket
+        var existing = await _attachmentRepo.GetByFieldAsync("RmaTicketId", ticketId);
+
+        // 2. Identify attachments to delete
+        var currentIds = attachments.Where(a => !string.IsNullOrEmpty(a.Id)).Select(a => a.Id).ToHashSet();
+        foreach (var ext in existing)
+        {
+            if (!currentIds.Contains(ext.Id))
+            {
+                // Delete file locally
+                if (!string.IsNullOrEmpty(ext.FileUrl))
+                {
+                    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", ext.FileUrl.TrimStart('/'));
+                    if (System.IO.File.Exists(filePath))
+                    {
+                        try { System.IO.File.Delete(filePath); } catch { /* Ignore */ }
+                    }
+                }
+                // Delete from DB
+                await _attachmentRepo.DeleteAsync(ext.Id);
+            }
+        }
+
+        // 3. Save new attachments
+        var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads");
+        if (!Directory.Exists(uploadsFolder))
+        {
+            Directory.CreateDirectory(uploadsFolder);
+        }
+
+        foreach (var att in attachments)
+        {
+            if (!string.IsNullOrEmpty(att.Base64Data))
+            {
+                try
+                {
+                    var fileBytes = Convert.FromBase64String(att.Base64Data);
+                    var fileName = $"{Guid.NewGuid()}_{att.FileName}";
+                    var filePath = Path.Combine(uploadsFolder, fileName);
+
+                    await System.IO.File.WriteAllBytesAsync(filePath, fileBytes);
+
+                    var entity = new Attachment
+                    {
+                        RmaTicketId = ticketId,
+                        FileUrl = $"/uploads/{fileName}",
+                        FileType = att.FileType ?? "CONDITION_PHOTO",
+                        UploadedAt = DateTime.UtcNow
+                    };
+                    await _attachmentRepo.AddAsync(entity);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Error saving attachment: {ex.Message}");
+                }
+            }
+        }
+    }
+
+    private string? ExtractLocationFromStaffNote(string? staffNote)
+    {
+        if (string.IsNullOrEmpty(staffNote))
+            return null;
+
+        var startTag = "[Vị trí:";
+        var startIndex = staffNote.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
+        if (startIndex == -1)
+            return null;
+
+        var contentStart = startIndex + startTag.Length;
+        var endIndex = staffNote.IndexOf("]", contentStart);
+        if (endIndex == -1)
+            return null;
+
+        return staffNote.Substring(contentStart, endIndex - contentStart).Trim();
+    }
+
+    private async Task<string> ResolveLocationIdAsync(string locationName)
+    {
+        if (string.IsNullOrWhiteSpace(locationName))
+            return string.Empty;
+
+        var locations = await _locationRepo.GetAllAsync();
+        var loc = locations.FirstOrDefault(l => l.Name.Equals(locationName, StringComparison.OrdinalIgnoreCase));
+        if (loc != null)
+        {
+            return loc.Id;
+        }
+
+        // Create new location
+        var newLoc = new Location { Name = locationName };
+        var newId = await _locationRepo.AddAsync(newLoc);
+        return newId;
     }
 
     [HttpDelete("{id}")]

@@ -3,6 +3,7 @@
 @inject IRmaTicketService TicketService
 @inject CustomerService CustomerService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
 
 <MudDialog>
@@ -108,7 +109,31 @@
                                 }
                                 else
                                 {
-                                    <MudTextField Value="@Ticket.StatusName" Label="Trạng thái" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    <div class="d-flex align-center gap-2">
+                                        <MudTextField Value="@Ticket.StatusName" Label="Trạng thái" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
+                                        <div class="mt-2">
+                                            @if (Ticket.StatusName == "Closed")
+                                            {
+                                                <MudChip T="string" Color="Color.Info" Icon="@Icons.Material.Filled.DoneAll" Size="Size.Small">Đã hoàn tất</MudChip>
+                                            }
+                                            else if (Ticket.WarningColor == "Red")
+                                            {
+                                                <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small">Quá hạn</MudChip>
+                                            }
+                                            else if (Ticket.WarningColor == "Yellow")
+                                            {
+                                                <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small">Sắp trễ hạn</MudChip>
+                                            }
+                                            else if (Ticket.WarningColor == "Green")
+                                            {
+                                                <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small">An toàn</MudChip>
+                                            }
+                                            else
+                                            {
+                                                <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">Chưa gửi</MudChip>
+                                            }
+                                        </div>
+                                    </div>
                                 }
                             </MudItem>
                             
@@ -146,13 +171,13 @@
                         <MudGrid Spacing="2">
                             <MudItem xs="12" md="4">
                                 <MudText Typo="Typo.body2" Class="mb-2 fw-bold">Checklist Phụ kiện nhận kèm:</MudText>
-                                @if (Ticket.Checklists != null && Ticket.Checklists.Any())
+                                @if (Ticket.Checklists != null && Ticket.Checklists.Any(item => item.IsChecked))
                                 {
                                     <div class="d-flex flex-wrap gap-2">
-                                        @foreach (var item in Ticket.Checklists)
+                                        @foreach (var item in Ticket.Checklists.Where(item => item.IsChecked))
                                         {
-                                            <MudChip T="string" Color="@(item.IsChecked ? Color.Success : Color.Default)" Variant="Variant.Outlined" Size="Size.Small">
-                                                @(item.IsChecked ? "✓ " : "")@item.ItemName
+                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                                ✓ @item.ItemName
                                             </MudChip>
                                         }
                                     </div>
@@ -169,7 +194,7 @@
                                     <div class="d-flex flex-wrap gap-2">
                                         @foreach (var img in Ticket.Attachments)
                                         {
-                                            <MudImage Src="@img.FileUrl" Alt="@img.FileName" Elevation="2" Class="rounded-lg" Style="height: 80px; width: 80px; object-fit: cover; cursor: pointer;" />
+                                            <MudImage Src="@img.FileUrl" Alt="@img.FileName" Elevation="2" Class="rounded-lg" Style="height: 80px; width: 80px; object-fit: cover; cursor: pointer;" @onclick="@(() => OpenImagePreview(img.FileUrl))" />
                                         }
                                     </div>
                                 }
@@ -300,6 +325,12 @@
         {
             Ticket.StatusName = selectedStatus.StatusName;
             Ticket.StatusColorCode = selectedStatus.ColorCode;
+
+            if (Ticket.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+            {
+                Ticket.WarningColor = null;
+                Ticket.IsUrgent = false;
+            }
         }
 
         var success = await TicketService.UpdateRmaTicketAsync(Ticket.Id, Ticket);
@@ -322,6 +353,13 @@
         var baseAddress = TicketService.GetBaseAddress();
         var pdfUrl = $"{baseAddress}api/rmatickets/{Ticket.Id}/pdf";
         await JsRuntime.InvokeVoidAsync("open", pdfUrl, "_blank");
+    }
+
+    private async Task OpenImagePreview(string url)
+    {
+        var parameters = new DialogParameters { ["ImageUrl"] = url };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, NoHeader = true };
+        await DialogService.ShowAsync<ImagePreviewDialog>("", parameters, options);
     }
 
     void Close() => MudDialog.Cancel();

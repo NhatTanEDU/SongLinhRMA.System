@@ -122,7 +122,13 @@
             }
         </MudTd>
         <MudTd DataLabel="Cảnh báo SLA">
-            @if (context.WarningColor == "Red")
+            @if (context.StatusName == "Closed")
+            {
+                <MudChip T="string" Color="Color.Info" Icon="@Icons.Material.Filled.DoneAll" Size="Size.Small">
+                    Đã hoàn tất
+                </MudChip>
+            }
+            else if (context.WarningColor == "Red")
             {
                 <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small">
                     Quá hạn (>= 14 ngày)
@@ -308,6 +314,8 @@
         var oldStatusId = ticket.StatusId;
         var oldStatusName = ticket.StatusName;
         var oldStatusColor = ticket.StatusColorCode;
+        var oldWarningColor = ticket.WarningColor;
+        var oldIsUrgent = ticket.IsUrgent;
 
         var newStatus = _statuses.FirstOrDefault(s => s.Id == newStatusId);
         if (newStatus == null) return;
@@ -316,6 +324,11 @@
         ticket.StatusId = newStatusId;
         ticket.StatusName = newStatus.StatusName;
         ticket.StatusColorCode = newStatus.ColorCode;
+        if (newStatus.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+        {
+            ticket.WarningColor = null;
+            ticket.IsUrgent = false;
+        }
         StateHasChanged();
 
         var success = await TicketService.UpdateRmaTicketAsync(ticket.Id, ticket);
@@ -329,6 +342,8 @@
             ticket.StatusId = oldStatusId;
             ticket.StatusName = oldStatusName;
             ticket.StatusColorCode = oldStatusColor;
+            ticket.WarningColor = oldWarningColor;
+            ticket.IsUrgent = oldIsUrgent;
             StateHasChanged();
             Snackbar.Add("Có lỗi xảy ra khi cập nhật trạng thái.", Severity.Error);
         }

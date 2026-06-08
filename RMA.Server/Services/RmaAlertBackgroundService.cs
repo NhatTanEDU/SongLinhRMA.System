@@ -56,67 +56,71 @@ public class RmaAlertBackgroundService : BackgroundService
 
                     foreach (var ticket in tickets)
                     {
-                        // 2. Chỉ kiểm tra các phiếu đã gửi hãng (có SentDate) và chưa hoàn thành
-                        if (ticket.SentDate.HasValue)
+                        bool isClosed = false;
+                        if (statuses.TryGetValue(ticket.StatusId, out var status))
                         {
-                            bool isIncomplete = true;
-                            if (statuses.TryGetValue(ticket.StatusId, out var status))
+                            isClosed = status.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase);
+                        }
+
+                        if (isClosed)
+                        {
+                            // Nếu phiếu đã Closed nhưng vẫn còn cảnh báo bị kẹt, hãy dọn dẹp
+                            if (!string.IsNullOrEmpty(ticket.WarningColor) || ticket.IsUrgent)
                             {
-                                // "Closed" là trạng thái hoàn thành duy nhất
-                                if (status.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase))
-                                {
-                                    isIncomplete = false;
-                                }
+                                ticket.WarningColor = null;
+                                ticket.IsUrgent = false;
+
+                                await ticketRepo.UpdateAsync(ticket.Id, ticket);
+                                _logger.LogInformation("🧹 [RmaAlert] Đã làm sạch dữ liệu cảnh báo bị kẹt của phiếu Đóng #{Id}", ticket.Id);
+                            }
+                        }
+                        else if (ticket.SentDate.HasValue)
+                        {
+                            // 3. Tính toán số ngày chênh lệch dựa trên giờ UTC
+                            double diffDays = (DateTime.UtcNow - ticket.SentDate.Value).TotalDays;
+
+                            string newWarningColor = "Green";
+                            bool shouldSetUrgent = false;
+
+                            if (diffDays >= 14)
+                            {
+                                newWarningColor = "Red";
+                                shouldSetUrgent = true;
+                            }
+                            else if (diffDays >= 10)
+                            {
+                                newWarningColor = "Yellow";
                             }
 
-                            if (isIncomplete)
+                            // 4. Tối ưu hóa ghi: Chỉ cập nhật nếu WarningColor hoặc IsUrgent thay đổi
+                            bool isColorChanged = ticket.WarningColor != newWarningColor;
+                            bool isUrgentChanged = ticket.IsUrgent != shouldSetUrgent;
+
+                            if (isColorChanged || isUrgentChanged)
                             {
-                                // 3. Tính toán số ngày chênh lệch dựa trên giờ UTC
-                                double diffDays = (DateTime.UtcNow - ticket.SentDate.Value).TotalDays;
-
-                                string newWarningColor = "Green";
-                                bool shouldSetUrgent = false;
-
-                                if (diffDays >= 14)
+                                ticket.WarningColor = newWarningColor;
+                                
+                                // Cập nhật mức độ ưu tiên sang Khẩn (IsUrgent = true) nếu đạt mốc >= 14 ngày
+                                if (shouldSetUrgent)
                                 {
-                                    newWarningColor = "Red";
-                                    shouldSetUrgent = true;
-                                }
-                                else if (diffDays >= 10)
-                                {
-                                    newWarningColor = "Yellow";
+                                    ticket.IsUrgent = true;
                                 }
 
-                                // 4. Tối ưu hóa ghi: Chỉ cập nhật nếu WarningColor hoặc IsUrgent thay đổi
-                                bool isColorChanged = ticket.WarningColor != newWarningColor;
-                                bool isUrgentChanged = ticket.IsUrgent != shouldSetUrgent;
+                                await ticketRepo.UpdateAsync(ticket.Id, ticket);
+                                _logger.LogInformation("💾 [RmaAlert] Đã cập nhật cảnh báo cho Phiếu #{Id}: WarningColor={Color}, IsUrgent={Urgent}", 
+                                    ticket.Id, newWarningColor, ticket.IsUrgent);
 
-                                if (isColorChanged || isUrgentChanged)
+                                // 5. Nếu chuyển sang màu Đỏ (>= 14 ngày) thì bắn thông báo FCM
+                                if (newWarningColor == "Red" && isColorChanged)
                                 {
-                                    ticket.WarningColor = newWarningColor;
+                                    string customerName = customers.TryGetValue(ticket.CustomerId, out var cust) ? cust.Name : "Khách hàng không xác định";
                                     
-                                    // Cập nhật mức độ ưu tiên sang Khẩn (IsUrgent = true) nếu đạt mốc >= 14 ngày
-                                    if (shouldSetUrgent)
-                                    {
-                                        ticket.IsUrgent = true;
-                                    }
+                                    // Sử dụng UTC+7 (giờ Việt Nam) cho hiển thị tin nhắn FCM
+                                    DateTime localSentDate = ticket.SentDate.Value.AddHours(7);
+                                    string reason = $"Gửi hãng quá 14 ngày (Từ ngày {localSentDate:dd/MM/yyyy HH:mm})";
 
-                                    await ticketRepo.UpdateAsync(ticket.Id, ticket);
-                                    _logger.LogInformation("💾 [RmaAlert] Đã cập nhật cảnh báo cho Phiếu #{Id}: WarningColor={Color}, IsUrgent={Urgent}", 
-                                        ticket.Id, newWarningColor, ticket.IsUrgent);
-
-                                    // 5. Nếu chuyển sang màu Đỏ (>= 14 ngày) thì bắn thông báo FCM
-                                    if (newWarningColor == "Red" && isColorChanged)
-                                    {
-                                        string customerName = customers.TryGetValue(ticket.CustomerId, out var cust) ? cust.Name : "Khách hàng không xác định";
-                                        
-                                        // Sử dụng UTC+7 (giờ Việt Nam) cho hiển thị tin nhắn FCM
-                                        DateTime localSentDate = ticket.SentDate.Value.AddHours(7);
-                                        string reason = $"Gửi hãng quá 14 ngày (Từ ngày {localSentDate:dd/MM/yyyy HH:mm})";
-
-                                        _logger.LogWarning("🚨 [RmaAlert] Phiếu RMA #{Id} đã quá hạn 14 ngày! Tiến hành gửi push notification qua FCM...", ticket.Id);
-                                        await _fcmService.SendAlertAsync(ticket.Id, customerName, reason);
-                                    }
+                                    _logger.LogWarning("🚨 [RmaAlert] Phiếu RMA #{Id} đã quá hạn 14 ngày! Tiến hành gửi push notification qua FCM...", ticket.Id);
+                                    await _fcmService.SendAlertAsync(ticket.Id, customerName, reason);
                                 }
                             }
                         }

@@ -45,48 +45,7 @@ public class RmaReceiptPdfService : IPdfService
 
     private void PopulateChecklistsFromStaffNote(RmaTicketDto ticket)
     {
-        if (ticket.Checklists != null && ticket.Checklists.Any())
-            return;
-
-        ticket.Checklists = new List<ChecklistDto>();
-
-        if (string.IsNullOrEmpty(ticket.StaffNote))
-            return;
-
-        // Try to find [Phụ kiện: ...] in StaffNote
-        var startTag = "[Phụ kiện:";
-        var startIndex = ticket.StaffNote.IndexOf(startTag, StringComparison.OrdinalIgnoreCase);
-        if (startIndex == -1)
-            return;
-
-        var contentStart = startIndex + startTag.Length;
-        var endIndex = ticket.StaffNote.IndexOf("]", contentStart);
-        if (endIndex == -1)
-            return;
-
-        var accsString = ticket.StaffNote.Substring(contentStart, endIndex - contentStart).Trim();
-        if (string.IsNullOrEmpty(accsString) || accsString.Equals("Không có", StringComparison.OrdinalIgnoreCase))
-            return;
-
-        var accList = accsString.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        
-        // Default list of accessories to show in checklist (with checked status based on parsed string)
-        var defaultAccs = new[] { "Adapter/Sạc", "Dây nguồn", "Pin ngoài", "Chuột", "Bàn phím", "Bao da/Túi", "Bút cảm ứng" };
-        
-        foreach (var def in defaultAccs)
-        {
-            var isChecked = accList.Any(a => a.Contains(def, StringComparison.OrdinalIgnoreCase) || def.Contains(a, StringComparison.OrdinalIgnoreCase));
-            ticket.Checklists.Add(new ChecklistDto { ItemName = def, IsChecked = isChecked });
-        }
-
-        // Add any custom accessories that are in the parsed list but not in the default list
-        foreach (var acc in accList)
-        {
-            if (!defaultAccs.Any(def => def.Contains(acc, StringComparison.OrdinalIgnoreCase) || acc.Contains(def, StringComparison.OrdinalIgnoreCase)))
-            {
-                ticket.Checklists.Add(new ChecklistDto { ItemName = acc, IsChecked = true });
-            }
-        }
+        ticket.PopulateChecklistsFromStaffNote();
     }
 
     private void ComposeHeader(IContainer container, RmaTicketDto ticket)

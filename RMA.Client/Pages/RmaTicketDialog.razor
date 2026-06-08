@@ -281,6 +281,40 @@
                                                OnClick="AddCustomAcc">Thêm</MudButton>
                                 </div>
                             </MudItem>
+
+                            <!-- Upload hình ảnh đính kèm -->
+                            <MudItem xs="12" Class="mt-3">
+                                <MudText Typo="Typo.body2" Class="mb-2"><b>Tải lên hình ảnh hiện trạng (Serial / Ngoại quan):</b></MudText>
+                                <div class="d-flex align-center gap-3">
+                                    <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="OnFilesChanged" Accept=".jpg,.jpeg,.png" MaximumFileCount="5">
+                                        <ActivatorContent>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.CloudUpload">
+                                                Chọn ảnh tải lên...
+                                            </MudButton>
+                                        </ActivatorContent>
+                                    </MudFileUpload>
+                                    @if (_uploading)
+                                    {
+                                        <MudProgressCircular Color="Color.Info" Size="Size.Small" Indeterminate="true" />
+                                    }
+                                </div>
+                                
+                                @if (Ticket.Attachments != null && Ticket.Attachments.Any())
+                                {
+                                    <div class="d-flex flex-wrap gap-2 mt-2">
+                                        @foreach (var att in Ticket.Attachments)
+                                        {
+                                            <div class="position-relative" style="width: 80px; height: 80px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; overflow: visible; margin-right: 12px; margin-top: 6px;">
+                                                <MudImage Src="@(string.IsNullOrEmpty(att.Base64Data) ? att.FileUrl : $"data:image/png;base64,{att.Base64Data}")"
+                                                          Alt="@att.FileName" Class="rounded-lg" Style="width: 100%; height: 100%; object-fit: cover;" />
+                                                <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small"
+                                                               Style="position: absolute; top: -10px; right: -10px; z-index: 10; background: white; padding: 2px;"
+                                                               OnClick="@(() => RemoveAttachment(att))" />
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                            </MudItem>
                         </MudGrid>
                     </div>
                 </MudItem>
@@ -666,4 +700,52 @@
     }
 
     void Cancel() => MudDialog.Cancel();
+
+    private bool _uploading;
+
+    private async Task OnFilesChanged(IReadOnlyList<IBrowserFile> files)
+    {
+        if (files == null || !files.Any()) return;
+        _uploading = true;
+        StateHasChanged();
+
+        foreach (var file in files)
+        {
+            if (file.Size > 5 * 1024 * 1024) // 5MB limit
+            {
+                Snackbar.Add($"File {file.Name} vượt quá giới hạn 5MB!", Severity.Warning);
+                continue;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var base64 = Convert.ToBase64String(ms.ToArray());
+
+                Ticket.Attachments.Add(new AttachmentDto
+                {
+                    FileName = file.Name,
+                    Base64Data = base64,
+                    FileType = file.Name.Contains("serial", StringComparison.OrdinalIgnoreCase) || file.Name.Contains("sn", StringComparison.OrdinalIgnoreCase)
+                        ? "SN_PHOTO"
+                        : "CONDITION_PHOTO",
+                    UploadedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi khi tải ảnh {file.Name}: {ex.Message}", Severity.Error);
+            }
+        }
+
+        _uploading = false;
+        StateHasChanged();
+    }
+
+    private void RemoveAttachment(AttachmentDto att)
+    {
+        Ticket.Attachments.Remove(att);
+    }
 }

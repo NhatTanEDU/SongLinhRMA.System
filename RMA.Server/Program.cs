@@ -90,6 +90,8 @@ builder.Services.AddScoped<FirestoreRepository<Category>>(provider => new Firest
 builder.Services.AddScoped<FirestoreRepository<StatusMaster>>(provider => new FirestoreRepository<StatusMaster>(provider.GetRequiredService<FirestoreDb>(), "status_masters"));
 builder.Services.AddScoped<FirestoreRepository<Location>>(provider => new FirestoreRepository<Location>(provider.GetRequiredService<FirestoreDb>(), "locations"));
 builder.Services.AddScoped<FirestoreRepository<RmaTicket>>(provider => new FirestoreRepository<RmaTicket>(provider.GetRequiredService<FirestoreDb>(), "rma_tickets"));
+builder.Services.AddScoped<FirestoreRepository<Attachment>>(provider => new FirestoreRepository<Attachment>(provider.GetRequiredService<FirestoreDb>(), "attachments"));
+builder.Services.AddScoped<FirestoreRepository<StatusHistory>>(provider => new FirestoreRepository<StatusHistory>(provider.GetRequiredService<FirestoreDb>(), "status_histories"));
 
 // Firebase Cloud Messaging (FCM)
 builder.Services.AddSingleton<IFcmService, FcmService>();
@@ -113,6 +115,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseStaticFiles();
 app.UseCors("AllowBlazorWasm");
 
 app.UseAuthentication();

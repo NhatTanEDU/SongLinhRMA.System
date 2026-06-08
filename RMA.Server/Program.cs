@@ -100,6 +100,9 @@ builder.Services.AddScoped<GoogleVisionOcrService>();
 builder.Services.AddScoped<TesseractOcrService>();
 builder.Services.AddScoped<IOcrService, BarcodeAndOcrService>();
 
+// PDF Service
+builder.Services.AddScoped<IPdfService, RmaReceiptPdfService>();
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();

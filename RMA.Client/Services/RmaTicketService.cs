@@ -86,4 +86,14 @@ public class RmaTicketService : IRmaTicketService
     {
         return await _http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new List<ModelDto>();
     }
+
+    public string GetBaseAddress()
+    {
+        return _http.BaseAddress?.ToString() ?? "";
+    }
+
+    public async Task<DashboardSummaryDto?> GetDashboardSummaryAsync()
+    {
+        return await _http.GetFromJsonAsync<DashboardSummaryDto>("api/rmatickets/dashboard-summary");
+    }
 }

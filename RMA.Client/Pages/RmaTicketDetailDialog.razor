@@ -1,7 +1,9 @@
 @using RMA.Shared.DTOs
 @using RMA.Client.Services
 @inject IRmaTicketService TicketService
+@inject CustomerService CustomerService
 @inject ISnackbar Snackbar
+@inject IJSRuntime JsRuntime
 
 <MudDialog>
     <TitleContent>
@@ -221,10 +223,37 @@
                     </MudCardContent>
                 </MudCard>
             </MudItem>
+
+            <!-- Khối 5: Bản đồ vị trí khách hàng -->
+            @if (customer != null && !string.IsNullOrEmpty(customer.Address))
+            {
+                <MudItem xs="12">
+                    <MudCard Elevation="1" Class="rounded-lg">
+                        <MudCardHeader>
+                            <CardHeaderContent>
+                                <MudText Typo="Typo.subtitle1" Color="Color.Primary"><b>5. Bản Đồ Vị Trí Khách Hàng</b></MudText>
+                            </CardHeaderContent>
+                            <CardHeaderActions>
+                                <MudIcon Icon="@Icons.Material.Filled.Map" Color="Color.Primary" />
+                            </CardHeaderActions>
+                        </MudCardHeader>
+                        <MudCardContent>
+                            <iframe 
+                                src="https://maps.google.com/maps?q=@Uri.EscapeDataString(customer.Address)&output=embed" 
+                                width="100%" 
+                                height="350" 
+                                style="border:0; border-radius: 8px;" 
+                                allowfullscreen="" 
+                                loading="lazy">
+                            </iframe>
+                        </MudCardContent>
+                    </MudCard>
+                </MudItem>
+            }
         </MudGrid>
     </DialogContent>
     <DialogActions>
-        <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Default" Variant="Variant.Outlined" Class="mr-auto">In Biên Nhận PDF</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Default" Variant="Variant.Outlined" Class="mr-auto" OnClick="PrintReceipt">In Biên Nhận PDF</MudButton>
         @if (isEditing)
         {
             <MudButton StartIcon="@Icons.Material.Filled.Save" Color="Color.Success" Variant="Variant.Filled" Class="mr-2" OnClick="SaveChanges" Disabled="@isSaving">
@@ -243,10 +272,22 @@
     private bool isEditing = false;
     private bool isSaving = false;
     private List<StatusMasterDto> _statuses = new();
+    private CustomerDto? customer;
 
     protected override async Task OnInitializedAsync()
     {
         _statuses = await TicketService.GetStatusesAsync();
+        if (!string.IsNullOrEmpty(Ticket.CustomerId))
+        {
+            try
+            {
+                customer = await CustomerService.GetCustomerAsync(Ticket.CustomerId);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading customer details: {ex.Message}");
+            }
+        }
     }
 
     private async Task SaveChanges()
@@ -274,6 +315,13 @@
         {
             Snackbar.Add("Có lỗi xảy ra khi lưu.", Severity.Error);
         }
+    }
+
+    private async Task PrintReceipt()
+    {
+        var baseAddress = TicketService.GetBaseAddress();
+        var pdfUrl = $"{baseAddress}api/rmatickets/{Ticket.Id}/pdf";
+        await JsRuntime.InvokeVoidAsync("open", pdfUrl, "_blank");
     }
 
     void Close() => MudDialog.Cancel();

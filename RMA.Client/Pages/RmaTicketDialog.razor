@@ -148,13 +148,21 @@
                                 {
                                     <MudCard Elevation="2" Class="mt-3 pa-3" Style="border-left: 3px solid #29b6f6;">
                                         <MudText Typo="Typo.subtitle2" Color="Color.Info"><b>+ Thêm Thiết Bị Nhanh</b></MudText>
-                                        <MudSelect T="string" Label="Model thiết bị *" @bind-Value="_newDeviceModelId"
-                                                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="mt-2">
-                                            @foreach (var m in _models)
-                                            {
-                                                <MudSelectItem Value="@m.Id">@m.ModelName (@m.Brand)</MudSelectItem>
-                                            }
-                                        </MudSelect>
+                                        <div class="d-flex align-center gap-2 mt-2">
+                                            <MudSelect T="string" Label="Model thiết bị *" @bind-Value="_newDeviceModelId"
+                                                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Style="margin-top: 0;">
+                                                @foreach (var m in _models)
+                                                {
+                                                    <MudSelectItem Value="@m.Id">@m.ModelName (@m.Brand)</MudSelectItem>
+                                                }
+                                            </MudSelect>
+                                            <MudTooltip Text="Thêm dòng máy (Model) mới">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                                               Color="Color.Primary" Variant="Variant.Filled"
+                                                               Size="Size.Medium" Style="height: 40px; width: 40px;"
+                                                               OnClick="OpenAddModelDialog" />
+                                            </MudTooltip>
+                                        </div>
                                         <div class="d-flex align-end gap-2 mt-1">
                                             <MudTextField @bind-Value="_newDeviceSerial"
                                                           Label="Serial Number (S/N) *"
@@ -370,6 +378,7 @@
     string _newDeviceModelId = "";
     string _newDeviceSerial = "";
     bool _ocrScanning;
+    private Dictionary<string, string> _pendingDeviceCustomerUpdates = new();
 
     // Khối 2 state
     bool _warrantyActive = true;
@@ -404,10 +413,40 @@
 
     void OnCustomerChanged(string id)
     {
+        var oldDeviceId = Ticket.DeviceId;
         Ticket.CustomerId = id;
-        Ticket.DeviceId   = "";
         _filteredDevices  = _allDevices.Where(d => d.CustomerId == id).ToList();
-        _deviceBrand      = "Hãng";
+
+        if (!string.IsNullOrEmpty(oldDeviceId))
+        {
+            var oldDev = _allDevices.FirstOrDefault(d => d.Id == oldDeviceId);
+            if (oldDev != null)
+            {
+                var matchingDevice = _filteredDevices.FirstOrDefault(d => d.SerialNumber.Equals(oldDev.SerialNumber, StringComparison.OrdinalIgnoreCase));
+                if (matchingDevice != null)
+                {
+                    Ticket.DeviceId = matchingDevice.Id;
+                }
+                else
+                {
+                    // Transfer the device to the new customer in memory
+                    oldDev.CustomerId = id;
+                    _filteredDevices = _allDevices.Where(d => d.CustomerId == id).ToList();
+                    Ticket.DeviceId = oldDev.Id;
+                    
+                    _pendingDeviceCustomerUpdates[oldDev.Id] = id;
+                }
+            }
+            else
+            {
+                Ticket.DeviceId = "";
+            }
+        }
+        else
+        {
+            Ticket.DeviceId = "";
+        }
+        UpdateBrand();
     }
 
     void UpdateBrand()
@@ -559,6 +598,24 @@
         await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
+        // Save pending device customer transfers to DB
+        foreach (var kvp in _pendingDeviceCustomerUpdates)
+        {
+            var devToUpdate = _allDevices.FirstOrDefault(d => d.Id == kvp.Key);
+            if (devToUpdate != null)
+            {
+                var updateDto = new DeviceCreateDto
+                {
+                    SerialNumber = devToUpdate.SerialNumber,
+                    CustomerId = kvp.Value,
+                    ModelId = devToUpdate.ModelId,
+                    PurchaseDate = devToUpdate.PurchaseDate,
+                    WarrantyExpiry = devToUpdate.WarrantyExpiry
+                };
+                await DeviceService.UpdateDeviceAsync(devToUpdate.Id, updateDto);
+            }
+        }
+
         // Build StaffNote with logistics metadata
         var accStr = _selectedAcc.Any() ? string.Join(", ", _selectedAcc) : "Không có";
         var bh     = _warrantyActive ? "Còn BH" : "Hết BH";
@@ -583,6 +640,29 @@
         Ticket.StatusColorCode = st?.ColorCode;
 
         MudDialog.Close(DialogResult.Ok(Ticket));
+    }
+
+    async Task OpenAddModelDialog()
+    {
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var param = new DialogParameters { ["Model"] = new ModelDto() };
+        var dialog = await DialogService.ShowAsync<ModelDialog>("Thêm Model Thiết Bị Mới", param, opts);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ModelDto modelDto })
+        {
+            var added = await ReferenceService.CreateModelAsync(modelDto);
+            if (added != null)
+            {
+                Snackbar.Add($"✅ Đã thêm Model: {added.ModelName} ({added.Brand})", Severity.Success);
+                _models = await ReferenceService.GetModelsAsync();
+                _newDeviceModelId = added.Id;
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Thêm Model thất bại!", Severity.Error);
+            }
+        }
     }
 
     void Cancel() => MudDialog.Cancel();

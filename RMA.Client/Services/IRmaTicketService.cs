@@ -14,4 +14,6 @@ public interface IRmaTicketService
     Task<List<StatusMasterDto>> GetStatusesAsync();
     Task<List<VendorDto>> GetVendorsAsync();
     Task<List<ModelDto>> GetModelsAsync();
+    string GetBaseAddress();
+    Task<DashboardSummaryDto?> GetDashboardSummaryAsync();
 }

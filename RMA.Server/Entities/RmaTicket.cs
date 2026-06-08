@@ -45,6 +45,9 @@ namespace RMA.Server.Entities
         [FirestoreProperty]
         public bool IsUrgent { get; set; } = false;
 
+        [FirestoreProperty]
+        public string? WarningColor { get; set; }
+
         [MaxLength(2000)]
         [FirestoreProperty]
         public string? StaffNote { get; set; }

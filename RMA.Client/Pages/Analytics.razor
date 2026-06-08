@@ -1,0 +1,203 @@
+@page "/analytics"
+@using RMA.Shared.DTOs
+@inject RMA.Client.Services.IRmaTicketService TicketService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Thống Kê & Báo Cáo - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
+    <div class="d-flex align-center gap-3 mb-6">
+        <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick='() => NavigationManager.NavigateTo("/")' Title="Quay lại trang chủ" />
+        <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #0072BC;">BÁO CÁO & THỐNG KÊ CHI TIẾT</MudText>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else if (_summary != null)
+    {
+        <!-- Summary Cards Row -->
+        <MudGrid Class="mb-8">
+            <!-- Card 1: Tổng số phiếu đang xử lý -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up border-start-5 border-blue" Style="border-left: 6px solid #2196f3;" @onclick='() => NavigationManager.NavigateTo("/tickets")'>
+                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Phiếu Đang Xử Lý</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold">@_summary.TotalOpenTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Card 2: Phiếu khẩn cấp -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 blinking-border cursor-pointer hover-up" Style="border-left: 6px solid #ff1744;" @onclick='() => NavigationManager.NavigateTo("/tickets?UrgentFilter=true")'>
+                    <MudAvatar Color="Color.Error" Variant="Variant.Filled" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Yêu Cầu GẤP</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold text-danger">@_summary.UrgentTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Card 3: Phiếu sắp trễ hạn -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #ffb300;" @onclick='() => NavigationManager.NavigateTo("/tickets?ColorFilter=Yellow")'>
+                    <MudAvatar Color="Color.Warning" Variant="Variant.Filled" Size="Size.Large" Style="background-color: #ffb300; color: black;">
+                        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Sắp Tới Hạn (Vàng)</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold text-warning-custom">@_summary.YellowAlertTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Card 4: Phiếu trễ hạn -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #d50000;" @onclick='() => NavigationManager.NavigateTo("/tickets?ColorFilter=Red")'>
+                    <MudAvatar Color="Color.Error" Variant="Variant.Filled" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Dangerous" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">QUÁ HẠN (Đỏ)</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold text-danger">@_summary.RedAlertTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Charts Row -->
+        <MudGrid Class="mb-8">
+            <!-- SLA warning Donut Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg h-100 d-flex flex-column align-center">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4 align-self-start" Style="color: #0072BC;">Tỉ lệ Cảnh báo SLA 14 Ngày</MudText>
+                    @if (!_donutSeries.Any() || _donutSeries[0].Data.All(d => d == 0))
+                    {
+                        <div class="d-flex align-center justify-center flex-grow-1" style="height: 320px;">
+                            <MudText Typo="Typo.body1" Class="text-secondary italic">Không có dữ liệu cảnh báo SLA</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- Fixed width/height + @key ensures correct dynamic SVG render -->
+                        <MudChart @key="_summary" T="double" ChartType="ChartType.Donut" LegendPosition="Position.Right" ChartSeries="@_donutSeries" ChartLabels="@_donutLabels" Width="320px" Height="320px" ChartOptions="@_donutOptions" />
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <!-- Vendors Bar Chart -->
+            <MudItem xs="12" md="6">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg h-100 d-flex flex-column align-center">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4 align-self-start" Style="color: #0072BC;">Top 5 Đơn vị giữ nhiều máy nhất</MudText>
+                    @if (!_barSeries.Any() || _barSeries[0].Data.All(d => d == 0))
+                    {
+                        <div class="d-flex align-center justify-center flex-grow-1" style="height: 320px;">
+                            <MudText Typo="Typo.body1" Class="text-secondary italic">Không có dữ liệu đơn vị xử lý</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        <!-- @key ensures the X-axis labels render correctly upon loaded data -->
+                        <MudChart @key="_summary" T="double" ChartType="ChartType.Bar" LegendPosition="Position.Top" ChartSeries="@_barSeries" ChartLabels="@_barLabels" Width="100%" Height="320px" ChartOptions="@_barOptions" />
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+<style>
+    .hover-up {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .hover-up:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
+    }
+    .text-danger { color: #d50000 !important; }
+    .text-warning-custom { color: #ffb300 !important; }
+    .blinking-border {
+        border: 1px solid rgba(255, 23, 68, 0.4);
+        animation: blinkBorder 1.5s infinite;
+    }
+    @@keyframes blinkBorder {
+        0% { border-color: rgba(255, 23, 68, 0.4); box-shadow: 0 0 2px rgba(255, 23, 68, 0.2); }
+        50% { border-color: rgba(255, 23, 68, 1); box-shadow: 0 0 10px rgba(255, 23, 68, 0.4); }
+        100% { border-color: rgba(255, 23, 68, 0.4); box-shadow: 0 0 2px rgba(255, 23, 68, 0.2); }
+    }
+    .cursor-pointer {
+        cursor: pointer;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private DashboardSummaryDto? _summary;
+    
+    // Donut chart variables
+    private List<ChartSeries<double>> _donutSeries = new();
+    private string[] _donutLabels = { "An toàn (Xanh)", "Sắp trễ (Vàng)", "Quá hạn (Đỏ)" };
+    private ChartOptions _donutOptions = new ChartOptions
+    {
+        ChartPalette = new string[] { "#4caf50", "#ffb300", "#f44336" } // Green, Yellow, Red
+    };
+
+    // Bar chart variables
+    private List<ChartSeries<double>> _barSeries = new();
+    private string[] _barLabels = new string[0];
+    private ChartOptions _barOptions = new ChartOptions
+    {
+        ChartPalette = new string[] { "#0072BC" } // Solicom Blue
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _summary = await TicketService.GetDashboardSummaryAsync();
+            if (_summary != null)
+            {
+                _donutSeries = new List<ChartSeries<double>>
+                {
+                    new ChartSeries<double>
+                    {
+                        Name = "Tỷ lệ SLA",
+                        Data = new double[] 
+                        { 
+                            _summary.GreenAlertTickets, 
+                            _summary.YellowAlertTickets, 
+                            _summary.RedAlertTickets 
+                        }
+                    }
+                };
+
+                _barLabels = _summary.TopVendors.Select(v => v.VendorName).ToArray();
+                _barSeries = new List<ChartSeries<double>>
+                {
+                    new ChartSeries<double>
+                    {
+                        Name = "Số lượng thiết bị",
+                        Data = _summary.TopVendors.Select(v => (double)v.TicketCount).ToArray()
+                    }
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

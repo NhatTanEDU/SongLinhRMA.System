@@ -14,5 +14,5 @@ public interface IFcmService
     /// <param name="ticketId">ID phiếu RMA</param>
     /// <param name="customerName">Tên khách hàng</param>
     /// <param name="reason">Lý do cảnh báo (ví dụ: "Chưa gửi đi hãng" hoặc "Gửi hãng quá 14 ngày")</param>
-    Task SendAlertAsync(int ticketId, string customerName, string reason);
+    Task SendAlertAsync(string ticketId, string customerName, string reason);
 }

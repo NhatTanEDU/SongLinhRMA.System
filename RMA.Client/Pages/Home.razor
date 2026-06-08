@@ -1,4 +1,6 @@
 @page "/"
+@using RMA.Shared.DTOs
+@inject RMA.Client.Services.IRmaTicketService TicketService
 
 <PageTitle>Trang Chủ - SOLICOM</PageTitle>
 
@@ -112,6 +114,78 @@
         </MudItem>
     </MudGrid>
 
+    <!-- Dashboard Statistics -->
+    <MudText Typo="Typo.h4" Class="fw-bold mb-6 text-center mt-12" Style="color: #0072BC;">BẢNG ĐIỀU KHIỂN & THỐNG KÊ (DASHBOARD)</MudText>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else if (_summary != null)
+    {
+        <MudGrid Class="mb-8">
+            <!-- Card 1: Tổng số phiếu đang xử lý -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #2196f3;" @onclick='() => NavigationManager.NavigateTo("/tickets")'>
+                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Assignment" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Phiếu Đang Xử Lý</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold">@_summary.TotalOpenTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Card 2: Phiếu khẩn cấp -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 blinking-border cursor-pointer hover-up" Style="border-left: 6px solid #ff1744;" @onclick='() => NavigationManager.NavigateTo("/tickets?UrgentFilter=true")'>
+                    <MudAvatar Color="Color.Error" Variant="Variant.Filled" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Warning" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Yêu Cầu GẤP</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold text-danger">@_summary.UrgentTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Card 3: Phiếu sắp trễ hạn (10-13 ngày) -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #ffb300;" @onclick='() => NavigationManager.NavigateTo("/tickets?ColorFilter=Yellow")'>
+                    <MudAvatar Color="Color.Warning" Variant="Variant.Filled" Size="Size.Large" Style="background-color: #ffb300; color: black;">
+                        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Sắp Tới Hạn (Vàng)</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold text-warning-custom">@_summary.YellowAlertTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Card 4: Phiếu trễ hạn (>= 14 ngày) -->
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #d50000;" @onclick='() => NavigationManager.NavigateTo("/tickets?ColorFilter=Red")'>
+                    <MudAvatar Color="Color.Error" Variant="Variant.Filled" Size="Size.Large">
+                        <MudIcon Icon="@Icons.Material.Filled.Dangerous" />
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">QUÁ HẠN (Đỏ)</MudText>
+                        <MudText Typo="Typo.h4" Class="fw-bold text-danger">@_summary.RedAlertTickets</MudText>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <div class="d-flex justify-center mb-8">
+            <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.BarChart" Size="Size.Large" OnClick='() => NavigationManager.NavigateTo("/analytics")' Class="rounded-lg px-6" Style="background-color: #0072BC;">
+                📊 Xem Biểu Đồ & Thống Kê Chi Tiết
+            </MudButton>
+        </div>
+    }
+
     <!-- Quick Access / Statistics -->
     <MudGrid Class="mt-8">
         <MudItem xs="12" md="8">
@@ -132,6 +206,8 @@
     </MudGrid>
 </MudContainer>
 
+@inject NavigationManager NavigationManager
+
 <style>
     .hover-up {
         transition: transform 0.3s ease, box-shadow 0.3s ease;
@@ -140,4 +216,39 @@
         transform: translateY(-5px);
         box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
     }
+    .text-danger { color: #d50000 !important; }
+    .text-warning-custom { color: #ffb300 !important; }
+    .blinking-border {
+        border: 1px solid rgba(255, 23, 68, 0.4);
+        animation: blinkBorder 1.5s infinite;
+    }
+    @@keyframes blinkBorder {
+        0% { border-color: rgba(255, 23, 68, 0.4); box-shadow: 0 0 2px rgba(255, 23, 68, 0.2); }
+        50% { border-color: rgba(255, 23, 68, 1); box-shadow: 0 0 10px rgba(255, 23, 68, 0.4); }
+        100% { border-color: rgba(255, 23, 68, 0.4); box-shadow: 0 0 2px rgba(255, 23, 68, 0.2); }
+    }
+    .cursor-pointer {
+        cursor: pointer;
+    }
 </style>
+
+@code {
+    private bool _loading = true;
+    private DashboardSummaryDto? _summary;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _summary = await TicketService.GetDashboardSummaryAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

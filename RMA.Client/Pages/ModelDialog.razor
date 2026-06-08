@@ -1,0 +1,95 @@
+@using RMA.Shared.DTOs
+@inject RMA.Client.Services.ReferenceDataService ReferenceService
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-3">
+            <MudIcon Icon="@Icons.Material.Filled.LaptopMac" Color="Color.Primary" />
+            <MudText Typo="Typo.h6"><b>Thêm Model Thiết Bị Mới</b></MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudGrid Spacing="3">
+                <MudItem xs="12">
+                    <MudTextField @bind-Value="Model.ModelName"
+                                  Label="Tên dòng máy (Model Name) *"
+                                  Placeholder="VD: Latitude 7490, LBP 2900, ProBook 450 G8..."
+                                  Required="true" RequiredError="Tên dòng máy là bắt buộc!"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Devices" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudTextField @bind-Value="Model.Brand"
+                                  Label="Hãng sản xuất (Brand) *"
+                                  Placeholder="VD: Dell, Canon, HP, Apple..."
+                                  Required="true" RequiredError="Hãng sản xuất là bắt buộc!"
+                                  Variant="Variant.Outlined"
+                                  Adornment="Adornment.Start"
+                                  AdornmentIcon="@Icons.Material.Filled.Copyright" />
+                </MudItem>
+
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="string" Label="Loại thiết bị (Category) *"
+                               @bind-Value="Model.CategoryId"
+                               Required="true" RequiredError="Vui lòng chọn loại thiết bị!"
+                               Variant="Variant.Outlined"
+                               AnchorOrigin="Origin.BottomCenter">
+                        @foreach (var cat in categories)
+                        {
+                            <MudSelectItem Value="@cat.Id">@cat.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" StartIcon="@Icons.Material.Filled.Close">Hủy</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled"
+                   StartIcon="@Icons.Material.Filled.Save"
+                   OnClick="Submit" Disabled="@(!success)">
+            Lưu Model
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public ModelDto Model { get; set; } = new ModelDto();
+
+    private List<CategoryDto> categories = new();
+    bool success;
+    MudForm form = null!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await ReferenceService.GetCategoriesAsync();
+            if (categories.Any() && string.IsNullOrEmpty(Model.CategoryId))
+            {
+                Model.CategoryId = categories.First().Id; // Auto-select first category by default
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải danh sách loại thiết bị: {ex.Message}", Severity.Error);
+        }
+    }
+
+    async Task Submit()
+    {
+        await form.ValidateAsync();
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Model));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

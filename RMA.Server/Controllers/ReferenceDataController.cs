@@ -14,11 +14,16 @@ public class ReferenceDataController : ControllerBase
 {
     private readonly FirestoreRepository<Vendor> _vendorRepo;
     private readonly FirestoreRepository<Model> _modelRepo;
+    private readonly FirestoreRepository<Category> _categoryRepo;
 
-    public ReferenceDataController(FirestoreRepository<Vendor> vendorRepo, FirestoreRepository<Model> modelRepo)
+    public ReferenceDataController(
+        FirestoreRepository<Vendor> vendorRepo, 
+        FirestoreRepository<Model> modelRepo,
+        FirestoreRepository<Category> categoryRepo)
     {
         _vendorRepo = vendorRepo;
         _modelRepo = modelRepo;
+        _categoryRepo = categoryRepo;
     }
 
     [HttpGet("vendors")]
@@ -99,6 +104,54 @@ public class ReferenceDataController : ControllerBase
             ModelName = m.ModelName,
             Brand = m.Brand,
             CategoryId = m.CategoryId
+        });
+        return Ok(dtos);
+    }
+
+    [HttpPost("models")]
+    public async Task<ActionResult<ModelDto>> PostModel([FromBody] ModelDto dto)
+    {
+        var entity = new Model
+        {
+            ModelName = dto.ModelName,
+            Brand = dto.Brand,
+            CategoryId = string.IsNullOrEmpty(dto.CategoryId) ? "1" : dto.CategoryId
+        };
+        var newId = await _modelRepo.AddAsync(entity);
+        return CreatedAtAction(nameof(GetModels), null, new ModelDto
+        {
+            Id = newId,
+            ModelName = entity.ModelName,
+            Brand = entity.Brand,
+            CategoryId = entity.CategoryId
+        });
+    }
+
+    [HttpGet("categories")]
+    public async Task<ActionResult<IEnumerable<CategoryDto>>> GetCategories()
+    {
+        var categories = await _categoryRepo.GetAllAsync();
+        if (!categories.Any())
+        {
+            var defaults = new List<Category>
+            {
+                new() { Name = "Laptop" },
+                new() { Name = "PC (Máy bộ)" },
+                new() { Name = "UPS (Bộ lưu điện)" },
+                new() { Name = "Printer (Máy in)" },
+                new() { Name = "Monitor (Màn hình)" }
+            };
+            foreach (var c in defaults)
+            {
+                c.Id = await _categoryRepo.AddAsync(c);
+            }
+            categories = defaults;
+        }
+
+        var dtos = categories.Select(c => new CategoryDto
+        {
+            Id = c.Id,
+            Name = c.Name
         });
         return Ok(dtos);
     }

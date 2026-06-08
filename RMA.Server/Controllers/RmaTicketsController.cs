@@ -19,6 +19,7 @@ public class RmaTicketsController : ControllerBase
     private readonly FirestoreRepository<StatusMaster> _statusRepo;
     private readonly FirestoreRepository<Vendor> _vendorRepo;
     private readonly FirestoreRepository<Model> _modelRepo;
+    private readonly IPdfService _pdfService;
 
     public RmaTicketsController(
         FirestoreRepository<RmaTicket> ticketRepo,
@@ -26,7 +27,8 @@ public class RmaTicketsController : ControllerBase
         FirestoreRepository<Customer> customerRepo,
         FirestoreRepository<StatusMaster> statusRepo,
         FirestoreRepository<Vendor> vendorRepo,
-        FirestoreRepository<Model> modelRepo)
+        FirestoreRepository<Model> modelRepo,
+        IPdfService pdfService)
     {
         _ticketRepo = ticketRepo;
         _deviceRepo = deviceRepo;
@@ -34,6 +36,7 @@ public class RmaTicketsController : ControllerBase
         _statusRepo = statusRepo;
         _vendorRepo = vendorRepo;
         _modelRepo = modelRepo;
+        _pdfService = pdfService;
     }
 
     [HttpGet]
@@ -71,6 +74,7 @@ public class RmaTicketsController : ControllerBase
                 StatusId = t.StatusId,
                 StatusName = status?.StatusName ?? string.Empty,
                 StatusColorCode = status?.ColorCode,
+                WarningColor = t.WarningColor,
                 
                 VendorId = t.VendorId,
                 VendorName = vendor?.Name,
@@ -140,6 +144,7 @@ public class RmaTicketsController : ControllerBase
             StatusId = t.StatusId,
             StatusName = status?.StatusName ?? string.Empty,
             StatusColorCode = status?.ColorCode,
+            WarningColor = t.WarningColor,
             
             VendorId = t.VendorId,
             VendorName = vendor?.Name,
@@ -206,5 +211,88 @@ public class RmaTicketsController : ControllerBase
     {
         await _ticketRepo.DeleteAsync(id);
         return NoContent();
+    }
+
+    [HttpGet("{id}/pdf")]
+    public async Task<IActionResult> GetPdf(string id)
+    {
+        var t = await _ticketRepo.GetByIdAsync(id);
+        if (t == null) return NotFound();
+
+        var device = await _deviceRepo.GetByIdAsync(t.DeviceId);
+        var customer = await _customerRepo.GetByIdAsync(t.CustomerId);
+        var status = await _statusRepo.GetByIdAsync(t.StatusId);
+        var vendor = t.VendorId != null ? await _vendorRepo.GetByIdAsync(t.VendorId) : null;
+        var model = device != null ? await _modelRepo.GetByIdAsync(device.ModelId) : null;
+
+        var dto = new RmaTicketDto
+        {
+            Id = t.Id,
+            DeviceId = t.DeviceId,
+            DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
+            DeviceModelName = model?.ModelName ?? string.Empty,
+            
+            CustomerId = t.CustomerId,
+            CustomerName = customer?.Name ?? string.Empty,
+            CustomerPhone = customer?.Phone,
+            CustomerContactPerson = customer?.ContactPerson,
+            CustomerAvatarUrl = customer?.AvatarUrl,
+            
+            StatusId = t.StatusId,
+            StatusName = status?.StatusName ?? string.Empty,
+            StatusColorCode = status?.ColorCode,
+            WarningColor = t.WarningColor,
+            
+            VendorId = t.VendorId,
+            VendorName = vendor?.Name,
+            
+            ProblemDescription = t.ProblemDescription,
+            ServiceMode = t.ServiceMode,
+            ReceivedDate = t.ReceivedDate,
+            SentDate = t.SentDate,
+            IsUrgent = t.IsUrgent,
+            StaffNote = t.StaffNote,
+            EndUserName = t.EndUserName
+        };
+
+        var pdfBytes = _pdfService.GenerateRmaReceiptPdf(dto);
+        return File(pdfBytes, "application/pdf", $"RmaReceipt_{id}.pdf");
+    }
+
+    [HttpGet("dashboard-summary")]
+    public async Task<ActionResult<DashboardSummaryDto>> GetDashboardSummary()
+    {
+        var tickets = await _ticketRepo.GetAllAsync();
+        var statuses = (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
+        var vendors = (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
+
+        var activeStatusIds = statuses.Values
+            .Where(s => !s.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+            .Select(s => s.Id)
+            .ToHashSet();
+
+        var activeTickets = tickets.Where(t => activeStatusIds.Contains(t.StatusId)).ToList();
+
+        var summary = new DashboardSummaryDto
+        {
+            TotalOpenTickets = activeTickets.Count,
+            UrgentTickets = activeTickets.Count(t => t.IsUrgent),
+            GreenAlertTickets = activeTickets.Count(t => t.WarningColor == "Green"),
+            YellowAlertTickets = activeTickets.Count(t => t.WarningColor == "Yellow"),
+            RedAlertTickets = activeTickets.Count(t => t.WarningColor == "Red"),
+            
+            TopVendors = activeTickets
+                .GroupBy(t => t.VendorId ?? "internal")
+                .Select(g => new VendorTicketCountDto
+                {
+                    VendorName = g.Key == "internal" ? "Nội bộ" : (vendors.TryGetValue(g.Key, out var v) ? v.Name : "Khác"),
+                    TicketCount = g.Count()
+                })
+                .OrderByDescending(v => v.TicketCount)
+                .Take(5)
+                .ToList()
+        };
+
+        return Ok(summary);
     }
 }

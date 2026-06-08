@@ -61,7 +61,7 @@ public class FcmService : IFcmService
         }
     }
 
-    public async Task SendAlertAsync(int ticketId, string customerName, string reason)
+    public async Task SendAlertAsync(string ticketId, string customerName, string reason)
     {
         // Firebase chưa được cấu hình — warning đã hiển thị 1 lần ở constructor, không lặp lại
         if (!IsReady) return;
@@ -76,7 +76,7 @@ public class FcmService : IFcmService
             },
             Data = new Dictionary<string, string>
             {
-                { "ticketId",      ticketId.ToString() },
+                { "ticketId",      ticketId },
                 { "customerName",  customerName },
                 { "reason",        reason },
                 { "timestamp",     DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString() }

@@ -1,7 +1,9 @@
 @page "/tickets"
 @inject RMA.Client.Services.IRmaTicketService TicketService
+@inject RMA.Client.Services.CustomerService CustomerService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject NavigationManager NavigationManager
 
 <MudText Typo="Typo.h3" GutterBottom="true">Quản lý RMA Tickets</MudText>
 
@@ -9,8 +11,35 @@
     <ToolBarContent>
         <MudText Typo="Typo.h6" Class="fw-bold">Danh sách RMA Tickets</MudText>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenCreateDialog" Class="ml-4 rounded-lg" StartIcon="@Icons.Material.Filled.Add">Tạo Ticket</MudButton>
+        <MudSelect T="bool" Label="Thứ tự thời gian" Value="@_sortByNewest" ValueChanged="OnSortOrderChanged"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="ml-4" Style="width: 155px; max-width: 155px; margin-top: 0;">
+            <MudSelectItem Value="true">Gần đây (Mới)</MudSelectItem>
+            <MudSelectItem Value="false">Cũ nhất (Cũ)</MudSelectItem>
+        </MudSelect>
+        <MudSelect T="DateTime?" Label="Lọc theo tháng" Value="@_selectedMonth" ValueChanged="OnMonthChanged"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="ml-4" Style="width: 165px; max-width: 165px; margin-top: 0;">
+            <MudSelectItem Value="@((DateTime?)null)">Tất cả các tháng</MudSelectItem>
+            @foreach (var m in _availableMonths)
+            {
+                <MudSelectItem Value="@((DateTime?)m)">@($"Tháng {m.ToString("MM/yyyy")}")</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="string" Label="Lọc khách hàng" Value="@_selectedCustomerId" ValueChanged="OnCustomerFilterChanged"
+                   Variant="Variant.Outlined" Margin="Margin.Dense" Class="ml-4" Style="width: 200px; max-width: 200px; margin-top: 0;">
+            <MudSelectItem Value="@((string)null!)">Tất cả khách hàng</MudSelectItem>
+            @foreach (var c in _availableCustomers)
+            {
+                <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+            }
+        </MudSelect>
+        @if (!string.IsNullOrEmpty(ColorFilter) || UrgentFilter == true || _selectedMonth.HasValue || !string.IsNullOrEmpty(_selectedCustomerId))
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.Clear" OnClick="ClearFilters" Class="ml-4 rounded-lg">
+                ❌ Xóa bộ lọc (@(GetActiveFilterText()))
+            </MudButton>
+        }
         <MudSpacer />
-        <MudTextField @bind-Value="searchString" Placeholder="Tìm kiếm..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined"></MudTextField>
+        <MudTextField @bind-Value="searchString" Immediate="true" Placeholder="Tìm theo Khách hàng, S/N..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined"></MudTextField>
     </ToolBarContent>
     <HeaderContent>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">STT</MudText></MudTh>
@@ -20,6 +49,7 @@
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Mô tả lỗi</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Trạng thái</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Ngày nhận</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Cảnh báo SLA</MudText></MudTh>
         <MudTh Style="text-align: right"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
     </HeaderContent>
     <RowTemplate>
@@ -39,7 +69,9 @@
                     </MudAvatar>
                 }
                 <div>
-                    <MudText Typo="Typo.body2" Class="fw-bold">@context.CustomerName</MudText>
+                    <MudLink Color="Color.Inherit" Underline="Underline.Hover" OnClick="@(() => OnCustomerClick(context.CustomerId))">
+                        <MudText Typo="Typo.body2" Class="fw-bold">@context.CustomerName</MudText>
+                    </MudLink>
                     @if(!string.IsNullOrEmpty(context.CustomerContactPerson)){
                         <MudText Typo="Typo.caption" Color="Color.Primary" Style="font-weight:600;">
                             <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Style="font-size:0.85rem;vertical-align:middle;" /> ĐD: @context.CustomerContactPerson
@@ -58,7 +90,9 @@
         </MudTd>
         <MudTd DataLabel="Thiết bị">
             <MudText Typo="Typo.body2" Class="fw-bold">@context.DeviceModelName</MudText>
-            <MudText Typo="Typo.caption" Color="Color.Secondary">SN: @context.DeviceSerialNumber</MudText>
+            <MudLink Color="Color.Secondary" Typo="Typo.caption" Underline="Underline.Hover" OnClick="@(() => OnSerialNumberClick(context.DeviceSerialNumber))">
+                SN: @context.DeviceSerialNumber
+            </MudLink>
         </MudTd>
         <MudTd DataLabel="Hãng">@context.VendorName</MudTd>
         <MudTd DataLabel="Mô tả lỗi">
@@ -69,15 +103,48 @@
             </MudTooltip>
         </MudTd>
         <MudTd DataLabel="Trạng thái">
-            <MudChip T="string" Color="GetStatusColor(context.StatusName)" Size="Size.Small">@context.StatusName</MudChip>
-            @if(context.IsUrgent) {
-                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Gấp</MudChip>
-            }
+            <div class="d-flex align-center gap-2">
+                <MudSelect T="string" Value="@context.StatusId" ValueChanged="@((newId) => OnQuickStatusChanged(context, newId))" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="min-width: 140px; margin-top: 0;">
+                    @foreach (var s in _statuses)
+                    {
+                        <MudSelectItem Value="@s.Id">@s.StatusName</MudSelectItem>
+                    }
+                </MudSelect>
+                @if(context.IsUrgent) {
+                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Gấp</MudChip>
+                }
+            </div>
         </MudTd>
         <MudTd DataLabel="Ngày nhận">
             <MudText Typo="Typo.body2">N: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
             @if(context.SentDate.HasValue){
                 <MudText Typo="Typo.caption" Color="Color.Secondary">G: @context.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Cảnh báo SLA">
+            @if (context.WarningColor == "Red")
+            {
+                <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small">
+                    Quá hạn (>= 14 ngày)
+                </MudChip>
+            }
+            else if (context.WarningColor == "Yellow")
+            {
+                <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small">
+                    Sắp trễ hạn (10-13 ngày)
+                </MudChip>
+            }
+            else if (context.WarningColor == "Green")
+            {
+                <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small">
+                    An toàn
+                </MudChip>
+            }
+            else 
+            {
+                <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">
+                    Chưa gửi đi
+                </MudChip>
             }
         </MudTd>
         <MudTd DataLabel="Thao tác" Style="text-align: right; white-space: nowrap;">
@@ -98,18 +165,173 @@
 </MudTable>
 
 @code {
+    [SupplyParameterFromQuery]
+    public string? ColorFilter { get; set; }
+
+    [SupplyParameterFromQuery]
+    public bool? UrgentFilter { get; set; }
+
     private List<RmaTicketDto> tickets = new List<RmaTicketDto>();
+    private List<RmaTicketDto> allTickets = new List<RmaTicketDto>();
     private string searchString = "";
     private RmaTicketDto? selectedItem = null;
+    private List<StatusMasterDto> _statuses = new();
+    private DateTime? _selectedMonth;
+    private bool _sortByNewest = true;
+    private List<DateTime> _availableMonths = new();
+    private string? _selectedCustomerId;
+    private List<CustomerDto> _availableCustomers = new();
 
     protected override async Task OnInitializedAsync()
     {
         await LoadData();
     }
 
+    protected override void OnParametersSet()
+    {
+        ApplyFilters();
+    }
+
+    private void ApplyFilters()
+    {
+        var query = allTickets.AsEnumerable();
+        if (!string.IsNullOrEmpty(ColorFilter))
+        {
+            query = query.Where(t => t.WarningColor != null && t.WarningColor.Equals(ColorFilter, StringComparison.OrdinalIgnoreCase));
+        }
+        if (UrgentFilter == true)
+        {
+            query = query.Where(t => t.IsUrgent);
+        }
+        if (_selectedMonth.HasValue)
+        {
+            query = query.Where(t => t.ReceivedDate.Month == _selectedMonth.Value.Month && t.ReceivedDate.Year == _selectedMonth.Value.Year);
+        }
+        if (!string.IsNullOrEmpty(_selectedCustomerId))
+        {
+            query = query.Where(t => t.CustomerId == _selectedCustomerId);
+        }
+        
+        query = _sortByNewest 
+            ? query.OrderByDescending(t => t.ReceivedDate) 
+            : query.OrderBy(t => t.ReceivedDate);
+
+        tickets = query.ToList();
+    }
+
+    private string GetColorFilterTranslation(string? color)
+    {
+        return color?.ToLower() switch
+        {
+            "red" => "Quá hạn",
+            "yellow" => "Sắp trễ hạn",
+            "green" => "Đúng hạn",
+            _ => color ?? ""
+        };
+    }
+
+    private void ClearFilters()
+    {
+        _selectedMonth = null;
+        _selectedCustomerId = null;
+        NavigationManager.NavigateTo("/tickets");
+    }
+
+    private void OnMonthChanged(DateTime? newDate)
+    {
+        _selectedMonth = newDate;
+        ApplyFilters();
+    }
+
+    private void OnSortOrderChanged(bool sortByNewest)
+    {
+        _sortByNewest = sortByNewest;
+        ApplyFilters();
+    }
+
+    private void OnCustomerFilterChanged(string? customerId)
+    {
+        _selectedCustomerId = customerId;
+        ApplyFilters();
+    }
+
+    private void OnCustomerClick(string customerId)
+    {
+        _selectedCustomerId = customerId;
+        ApplyFilters();
+    }
+
+    private void OnSerialNumberClick(string serialNumber)
+    {
+        searchString = serialNumber;
+        StateHasChanged();
+    }
+
+    private string GetActiveFilterText()
+    {
+        var parts = new List<string>();
+        if (UrgentFilter == true) parts.Add("GẤP");
+        if (!string.IsNullOrEmpty(ColorFilter)) parts.Add(GetColorFilterTranslation(ColorFilter));
+        if (_selectedMonth.HasValue) parts.Add($"Tháng {_selectedMonth.Value.ToString("MM/yyyy")}");
+        if (!string.IsNullOrEmpty(_selectedCustomerId))
+        {
+            var custName = _availableCustomers.FirstOrDefault(c => c.Id == _selectedCustomerId)?.Name ?? "Khách hàng";
+            parts.Add(custName);
+        }
+        return string.Join(" + ", parts);
+    }
+
     private async Task LoadData()
     {
-        tickets = await TicketService.GetRmaTicketsAsync();
+        var ticketsTask = TicketService.GetRmaTicketsAsync();
+        var statusesTask = TicketService.GetStatusesAsync();
+        var customersTask = CustomerService.GetCustomersAsync();
+        await Task.WhenAll(ticketsTask, statusesTask, customersTask);
+        
+        allTickets = ticketsTask.Result;
+        _statuses = statusesTask.Result;
+        _availableCustomers = customersTask.Result.OrderBy(c => c.Name).ToList();
+
+        _availableMonths = allTickets
+            .Select(t => new DateTime(t.ReceivedDate.Year, t.ReceivedDate.Month, 1))
+            .Distinct()
+            .OrderByDescending(d => d)
+            .ToList();
+
+        ApplyFilters();
+    }
+
+    private async Task OnQuickStatusChanged(RmaTicketDto ticket, string newStatusId)
+    {
+        if (ticket.StatusId == newStatusId) return;
+
+        var oldStatusId = ticket.StatusId;
+        var oldStatusName = ticket.StatusName;
+        var oldStatusColor = ticket.StatusColorCode;
+
+        var newStatus = _statuses.FirstOrDefault(s => s.Id == newStatusId);
+        if (newStatus == null) return;
+
+        // Optimistic UI update
+        ticket.StatusId = newStatusId;
+        ticket.StatusName = newStatus.StatusName;
+        ticket.StatusColorCode = newStatus.ColorCode;
+        StateHasChanged();
+
+        var success = await TicketService.UpdateRmaTicketAsync(ticket.Id, ticket);
+        if (success)
+        {
+            Snackbar.Add($"Đã cập nhật trạng thái thành công sang '{newStatus.StatusName}'!", Severity.Success);
+        }
+        else
+        {
+            // Rollback UI update
+            ticket.StatusId = oldStatusId;
+            ticket.StatusName = oldStatusName;
+            ticket.StatusColorCode = oldStatusColor;
+            StateHasChanged();
+            Snackbar.Add("Có lỗi xảy ra khi cập nhật trạng thái.", Severity.Error);
+        }
     }
 
     private async Task OpenCreateDialog()
@@ -152,6 +374,7 @@
             StatusId = ticket.StatusId,
             StatusName = ticket.StatusName,
             StatusColorCode = ticket.StatusColorCode,
+            WarningColor = ticket.WarningColor,
             VendorId = ticket.VendorId,
             VendorName = ticket.VendorName,
             ProblemDescription = ticket.ProblemDescription,
@@ -198,6 +421,7 @@
             StatusId = ticket.StatusId,
             StatusName = ticket.StatusName,
             StatusColorCode = ticket.StatusColorCode,
+            WarningColor = ticket.WarningColor,
             VendorId = ticket.VendorId,
             VendorName = ticket.VendorName,
             ProblemDescription = ticket.ProblemDescription,
@@ -224,8 +448,13 @@
             if (index != -1)
             {
                 tickets[index] = updatedTicket;
-                StateHasChanged();
             }
+            var allIndex = allTickets.FindIndex(t => t.Id == updatedTicket.Id);
+            if (allIndex != -1)
+            {
+                allTickets[allIndex] = updatedTicket;
+            }
+            StateHasChanged();
         }
     }
 

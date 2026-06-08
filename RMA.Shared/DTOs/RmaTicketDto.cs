@@ -19,6 +19,7 @@ namespace RMA.Shared.DTOs
         public string StatusId { get; set; } = string.Empty;
         public string StatusName { get; set; } = string.Empty;
         public string? StatusColorCode { get; set; }
+        public string? WarningColor { get; set; }
         
         public string? VendorId { get; set; }
         public string? VendorName { get; set; }

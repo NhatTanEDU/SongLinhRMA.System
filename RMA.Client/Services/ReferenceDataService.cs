@@ -45,4 +45,19 @@ public class ReferenceDataService
     {
         return await _http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new List<ModelDto>();
     }
+
+    public async Task<List<CategoryDto>> GetCategoriesAsync()
+    {
+        return await _http.GetFromJsonAsync<List<CategoryDto>>("api/referencedata/categories") ?? new List<CategoryDto>();
+    }
+
+    public async Task<ModelDto?> CreateModelAsync(ModelDto model)
+    {
+        var response = await _http.PostAsJsonAsync("api/referencedata/models", model);
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<ModelDto>();
+        }
+        return null;
+    }
 }

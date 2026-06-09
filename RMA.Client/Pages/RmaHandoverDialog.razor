@@ -1,0 +1,322 @@
+@using System.ComponentModel.DataAnnotations
+@using RMA.Shared.DTOs
+@using RMA.Client.Services
+@inject CustomerService CustomerService
+@inject IRmaTicketService TicketService
+@inject HttpClient Http
+@inject IJSRuntime JsRuntime
+@inject ISnackbar Snackbar
+@implements IDisposable
+
+<MudDialog>
+    <TitleContent>
+        <div class="d-flex align-center gap-3">
+            <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Primary" />
+            <MudText Typo="Typo.h6"><b>Xuất Biên Bản Bàn Giao (BBBG)</b></MudText>
+        </div>
+    </TitleContent>
+    <DialogContent>
+        <EditForm EditContext="@editContext">
+            <DataAnnotationsValidator />
+            
+            <MudGrid>
+                <!-- Customer Name (Searchable Dropdown) -->
+                <MudItem xs="12" md="6">
+                    <MudAutocomplete T="string" Label="Tên khách hàng *"
+                                     @bind-Value="handoverModel.CustomerName"
+                                     SearchFunc="@SearchCustomers"
+                                     Disabled="@isCustomerDisabled"
+                                     Variant="Variant.Outlined"
+                                     For="@(() => handoverModel.CustomerName)"
+                                     Required="true"
+                                     ResetValueOnEmptyText="true"
+                                     CoerceText="true" CoerceValue="true" />
+                </MudItem>
+
+                <!-- Ticket Type (Radio Group) -->
+                <MudItem xs="12" md="6">
+                    <MudText Typo="Typo.body2" Class="fw-bold mb-1">Loại hình biên bản (Dịch vụ) *</MudText>
+                    <MudRadioGroup T="TicketType" @bind-Value="handoverModel.TicketType" For="@(() => handoverModel.TicketType)">
+                        <MudRadio Value="TicketType.BaoHanh" Color="Color.Primary">Bảo hành (Warranty)</MudRadio>
+                        <MudRadio Value="TicketType.SuaChua" Color="Color.Secondary">Sửa chữa (Repair)</MudRadio>
+                    </MudRadioGroup>
+                </MudItem>
+
+                <!-- Items list header and Add item button -->
+                <MudItem xs="12" Class="d-flex align-center justify-space-between mt-4">
+                    <MudText Typo="Typo.subtitle1" Color="Color.Primary"><b>Danh sách thiết bị bàn giao</b></MudText>
+                    <MudButton StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small" OnClick="AddRow">
+                        Thêm thiết bị
+                    </MudButton>
+                </MudItem>
+
+                <!-- Items DataGrid/Table -->
+                <MudItem xs="12">
+                    <MudTable Items="@handoverModel.Items" Dense="true" Hover="true" Bordered="true" Elevation="1">
+                        <HeaderContent>
+                            <MudTh Style="width: 50px;">STT</MudTh>
+                            <MudTh>Tên thiết bị *</MudTh>
+                            <MudTh>Số Serial (S/N) *</MudTh>
+                            <MudTh Style="width: 100px;">Số lượng *</MudTh>
+                            <MudTh Style="width: 120px;">Đơn vị tính *</MudTh>
+                            <MudTh Style="width: 50px; text-align: center;">Xóa</MudTh>
+                        </HeaderContent>
+                        <RowTemplate Context="item">
+                            <MudTd DataLabel="STT">@item.STT</MudTd>
+                            <MudTd DataLabel="Tên thiết bị">
+                                <MudTextField @bind-Value="item.DeviceName" 
+                                              Variant="Variant.Text" 
+                                              Margin="Margin.Dense" 
+                                              Required="true" 
+                                              Placeholder="Nhập tên thiết bị..." />
+                            </MudTd>
+                            <MudTd DataLabel="Số Serial">
+                                <MudTextField @bind-Value="item.SerialNumber" 
+                                              Variant="Variant.Text" 
+                                              Margin="Margin.Dense" 
+                                              Required="true" 
+                                              Placeholder="Nhập số Serial..." />
+                            </MudTd>
+                            <MudTd DataLabel="Số lượng">
+                                <MudNumericField @bind-Value="item.Quantity" 
+                                                Variant="Variant.Text" 
+                                                Margin="Margin.Dense" 
+                                                Min="1" 
+                                                Required="true" />
+                            </MudTd>
+                            <MudTd DataLabel="Đơn vị tính">
+                                <MudTextField @bind-Value="item.Unit" 
+                                              Variant="Variant.Text" 
+                                              Margin="Margin.Dense" 
+                                              Required="true" 
+                                              Placeholder="Cái, bộ..." />
+                            </MudTd>
+                            <MudTd Style="text-align: center;">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" 
+                                               Color="Color.Error" 
+                                               Size="Size.Small" 
+                                               Disabled="@(handoverModel.Items.Count <= 1)"
+                                               OnClick="@(() => RemoveRow(item))" />
+                            </MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudItem>
+            </MudGrid>
+        </EditForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel" Variant="Variant.Text">Hủy</MudButton>
+        <MudButton Color="Color.Primary" 
+                   Variant="Variant.Filled" 
+                   StartIcon="@Icons.Material.Filled.Download" 
+                   Disabled="@(!isValid || isExporting)" 
+                   OnClick="ExportPdfAsync">
+            @(isExporting ? "Đang xuất..." : "Xuất BBBG")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public RmaTicketDto Ticket { get; set; } = new();
+
+    private EditContext? editContext;
+    private bool isValid = false;
+    private bool isExporting = false;
+    private bool isCustomerDisabled = false;
+    private List<string> _customerNames = new();
+    private HandoverModel handoverModel = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Setup initial form state
+        handoverModel.CustomerName = Ticket.CustomerName;
+        isCustomerDisabled = !string.IsNullOrEmpty(Ticket.CustomerId);
+
+        // Load customers for Autocomplete
+        try
+        {
+            var customers = await CustomerService.GetCustomersAsync();
+            _customerNames = customers.Select(c => c.Name).OrderBy(n => n).ToList();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading customers: {ex.Message}");
+        }
+
+        // Add default device item from Ticket if available
+        if (!string.IsNullOrEmpty(Ticket.DeviceId))
+        {
+            handoverModel.Items.Add(new HandoverItem
+            {
+                STT = 1,
+                DeviceName = Ticket.DeviceModelName,
+                SerialNumber = Ticket.DeviceSerialNumber,
+                Quantity = 1,
+                Unit = "Cái"
+            });
+        }
+        else
+        {
+            // Default blank row
+            handoverModel.Items.Add(new HandoverItem
+            {
+                STT = 1,
+                DeviceName = "",
+                SerialNumber = "",
+                Quantity = 1,
+                Unit = "Cái"
+            });
+        }
+
+        // Initialize edit context
+        editContext = new EditContext(handoverModel);
+        editContext.OnFieldChanged += HandleFieldChanged;
+        isValid = editContext.Validate();
+    }
+
+    private void HandleFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        isValid = editContext?.Validate() ?? false;
+        StateHasChanged();
+    }
+
+    private async Task<IEnumerable<string>> SearchCustomers(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return _customerNames;
+        return _customerNames.Where(x => x.Contains(value, StringComparison.InvariantCultureIgnoreCase));
+    }
+
+    private void AddRow()
+    {
+        var nextStt = handoverModel.Items.Any() ? handoverModel.Items.Max(i => i.STT) + 1 : 1;
+        handoverModel.Items.Add(new HandoverItem
+        {
+            STT = nextStt,
+            DeviceName = "",
+            SerialNumber = "",
+            Quantity = 1,
+            Unit = "Cái"
+        });
+        isValid = editContext?.Validate() ?? false;
+        StateHasChanged();
+    }
+
+    private void RemoveRow(HandoverItem item)
+    {
+        handoverModel.Items.Remove(item);
+        // Recalculate STT
+        for (int i = 0; i < handoverModel.Items.Count; i++)
+        {
+            handoverModel.Items[i].STT = i + 1;
+        }
+        isValid = editContext?.Validate() ?? false;
+        StateHasChanged();
+    }
+
+    private async Task ExportPdfAsync()
+    {
+        if (editContext == null || !editContext.Validate())
+            return;
+
+        isExporting = true;
+        StateHasChanged();
+
+        try
+        {
+            var req = new HandoverPdfRequest
+            {
+                CustomerName = handoverModel.CustomerName,
+                TicketType = handoverModel.TicketType,
+                Items = handoverModel.Items.Select(i => new HandoverItemDto
+                {
+                    STT = i.STT,
+                    DeviceName = i.DeviceName,
+                    SerialNumber = i.SerialNumber,
+                    Quantity = i.Quantity,
+                    Unit = i.Unit
+                }).ToList()
+            };
+
+            var baseAddress = TicketService.GetBaseAddress();
+            var pdfUrl = $"{baseAddress}api/rmatickets/{Ticket.Id}/export-pdf";
+
+            var response = await Http.PostAsJsonAsync(pdfUrl, req);
+            if (response.IsSuccessStatusCode)
+            {
+                var fileName = $"BBBG_{Ticket.Id.Substring(0, Math.Min(8, Ticket.Id.Length)).ToUpper()}.pdf";
+                
+                // Initialize the file downloader in JS
+                await JsRuntime.InvokeVoidAsync("fileDownload.init", fileName, "application/pdf");
+
+                // Stream the response in chunks to prevent Blazor RAM exhaustion
+                using var stream = await response.Content.ReadAsStreamAsync();
+                var buffer = new byte[64 * 1024]; // 64KB chunks
+                int bytesRead;
+
+                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    var chunkBase64 = Convert.ToBase64String(buffer, 0, bytesRead);
+                    await JsRuntime.InvokeVoidAsync("fileDownload.appendChunk", chunkBase64);
+                }
+
+                // Save and download the compiled file
+                await JsRuntime.InvokeVoidAsync("fileDownload.save");
+                Snackbar.Add("Xuất Biên bản bàn giao thành công!", Severity.Success);
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                Snackbar.Add($"Xuất PDF thất bại: {response.ReasonPhrase}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi khi tải file: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isExporting = false;
+            StateHasChanged();
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+
+    public void Dispose()
+    {
+        if (editContext != null)
+        {
+            editContext.OnFieldChanged -= HandleFieldChanged;
+        }
+    }
+
+    public class HandoverModel
+    {
+        [Required(ErrorMessage = "Vui lòng nhập hoặc chọn tên khách hàng!")]
+        public string CustomerName { get; set; } = string.Empty;
+
+        [Required]
+        public TicketType TicketType { get; set; } = TicketType.BaoHanh;
+
+        public List<HandoverItem> Items { get; set; } = new();
+    }
+
+    public class HandoverItem
+    {
+        public int STT { get; set; }
+
+        [Required(ErrorMessage = "Vui lòng nhập tên thiết bị!")]
+        public string DeviceName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Vui lòng nhập số Serial!")]
+        public string SerialNumber { get; set; } = string.Empty;
+
+        [Range(1, int.MaxValue, ErrorMessage = "Số lượng phải lớn hơn 0!")]
+        public int Quantity { get; set; } = 1;
+
+        [Required(ErrorMessage = "Vui lòng nhập đơn vị tính!")]
+        public string Unit { get; set; } = "Cái";
+    }
+}

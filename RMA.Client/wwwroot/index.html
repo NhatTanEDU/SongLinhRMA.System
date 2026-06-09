@@ -32,6 +32,39 @@
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
+    <script>
+        window.fileDownload = {
+            chunks: [],
+            fileName: '',
+            contentType: '',
+            init: function (name, type) {
+                this.chunks = [];
+                this.fileName = name;
+                this.contentType = type;
+            },
+            appendChunk: function (base64Chunk) {
+                const binaryString = window.atob(base64Chunk);
+                const len = binaryString.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                this.chunks.push(bytes);
+            },
+            save: function () {
+                const blob = new Blob(this.chunks, { type: this.contentType });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = this.fileName;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+                this.chunks = []; // Clear reference to prevent memory leaks
+            }
+        };
+    </script>
 </body>
 
 </html>

@@ -216,4 +216,12 @@ public class RmaReceiptPdfService : IPdfService
             col.Item().PaddingTop(5).AlignCenter().Text("Vui lòng mang theo phiếu này khi đến nhận lại thiết bị. Cảm ơn quý khách!").Italic().FontSize(8.5f).FontColor(Colors.Grey.Darken1);
         });
     }
+
+    public byte[] GenerateHandoverPdf(RmaTicketDto ticket, TicketType ticketType, List<HandoverItemDto> items)
+    {
+        var document = new PtscMcPdfTemplate(ticket, ticketType, items);
+        using var stream = new MemoryStream();
+        document.GeneratePdf(stream);
+        return stream.ToArray();
+    }
 }

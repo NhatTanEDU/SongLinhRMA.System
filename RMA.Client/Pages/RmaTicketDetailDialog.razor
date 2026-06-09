@@ -278,7 +278,8 @@
         </MudGrid>
     </DialogContent>
     <DialogActions>
-        <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Default" Variant="Variant.Outlined" Class="mr-auto" OnClick="PrintReceipt">In Biên Nhận PDF</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Default" Variant="Variant.Outlined" OnClick="PrintReceipt">In Biên Nhận PDF</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Assignment" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-auto ml-2" OnClick="OpenHandoverDialog">Xuất BBBG</MudButton>
         @if (isEditing)
         {
             <MudButton StartIcon="@Icons.Material.Filled.Save" Color="Color.Success" Variant="Variant.Filled" Class="mr-2" OnClick="SaveChanges" Disabled="@isSaving">
@@ -353,6 +354,18 @@
         var baseAddress = TicketService.GetBaseAddress();
         var pdfUrl = $"{baseAddress}api/rmatickets/{Ticket.Id}/pdf";
         await JsRuntime.InvokeVoidAsync("open", pdfUrl, "_blank");
+    }
+
+    private async Task OpenHandoverDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        var parameters = new DialogParameters
+        {
+            ["Ticket"] = Ticket
+        };
+
+        var dialog = await DialogService.ShowAsync<RmaHandoverDialog>("Xuất Biên Bản Bàn Giao", parameters, options);
+        await dialog.Result;
     }
 
     private async Task OpenImagePreview(string url)

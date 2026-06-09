@@ -678,6 +678,81 @@ public class RmaTicketsController : ControllerBase
         return File(pdfBytes, "application/pdf", $"RmaReceipt_{id}.pdf");
     }
 
+    [HttpPost("{id}/export-pdf")]
+    public async Task<IActionResult> ExportPdf(string id, [FromBody] HandoverPdfRequest request)
+    {
+        var t = await _ticketRepo.GetByIdAsync(id);
+        if (t == null) return NotFound();
+
+        var customerName = string.IsNullOrWhiteSpace(request.CustomerName) ? t.CustomerId : request.CustomerName;
+        if (customerName == t.CustomerId)
+        {
+            var customer = await _customerRepo.GetByIdAsync(t.CustomerId);
+            if (customer != null)
+            {
+                customerName = customer.Name;
+            }
+        }
+
+        var device = await _deviceRepo.GetByIdAsync(t.DeviceId);
+        var status = await _statusRepo.GetByIdAsync(t.StatusId);
+        var vendor = t.VendorId != null ? await _vendorRepo.GetByIdAsync(t.VendorId) : null;
+        var model = device != null ? await _modelRepo.GetByIdAsync(device.ModelId) : null;
+
+        var dto = new RmaTicketDto
+        {
+            Id = t.Id,
+            DeviceId = t.DeviceId,
+            DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
+            DeviceModelName = model?.ModelName ?? string.Empty,
+            
+            CustomerId = t.CustomerId,
+            CustomerName = customerName,
+            CustomerPhone = (await _customerRepo.GetByIdAsync(t.CustomerId))?.Phone,
+            CustomerContactPerson = (await _customerRepo.GetByIdAsync(t.CustomerId))?.ContactPerson,
+            
+            StatusId = t.StatusId,
+            StatusName = status?.StatusName ?? string.Empty,
+            StatusColorCode = status?.ColorCode,
+            WarningColor = t.WarningColor,
+            
+            VendorId = t.VendorId,
+            VendorName = vendor?.Name,
+            
+            ProblemDescription = t.ProblemDescription,
+            ServiceMode = t.ServiceMode,
+            ReceivedDate = t.ReceivedDate,
+            SentDate = t.SentDate,
+            IsUrgent = t.IsUrgent,
+            StaffNote = t.StaffNote,
+            EndUserName = t.EndUserName
+        };
+
+        var items = request.Items;
+        if (items == null || !items.Any())
+        {
+            items = new List<HandoverItemDto>
+            {
+                new()
+                {
+                    STT = 1,
+                    DeviceName = dto.DeviceModelName,
+                    SerialNumber = dto.DeviceSerialNumber,
+                    Quantity = 1,
+                    Unit = "Cái"
+                }
+            };
+        }
+
+        var pdfBytes = _pdfService.GenerateHandoverPdf(dto, request.TicketType, items);
+        var pdfStream = new System.IO.MemoryStream(pdfBytes);
+        return new FileStreamResult(pdfStream, "application/pdf")
+        {
+            FileDownloadName = $"HandoverMinute_{id}.pdf"
+        };
+    }
+
+
     [HttpGet("dashboard-summary")]
     public async Task<ActionResult<DashboardSummaryDto>> GetDashboardSummary()
     {

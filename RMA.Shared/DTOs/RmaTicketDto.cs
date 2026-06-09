@@ -131,4 +131,26 @@ namespace RMA.Shared.DTOs
         public string? Note { get; set; }
         public DateTime CreatedAt { get; set; }
     }
+
+    public enum TicketType
+    {
+        BaoHanh,
+        SuaChua
+    }
+
+    public class HandoverItemDto
+    {
+        public int STT { get; set; }
+        public string DeviceName { get; set; } = string.Empty;
+        public string SerialNumber { get; set; } = string.Empty;
+        public int Quantity { get; set; } = 1;
+        public string Unit { get; set; } = "Cái";
+    }
+
+    public class HandoverPdfRequest
+    {
+        public string CustomerName { get; set; } = string.Empty;
+        public TicketType TicketType { get; set; }
+        public List<HandoverItemDto> Items { get; set; } = new();
+    }
 }

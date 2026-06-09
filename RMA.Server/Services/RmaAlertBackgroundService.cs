@@ -76,21 +76,8 @@ public class RmaAlertBackgroundService : BackgroundService
                         }
                         else if (ticket.SentDate.HasValue)
                         {
-                            // 3. Tính toán số ngày chênh lệch dựa trên giờ UTC
-                            double diffDays = (DateTime.UtcNow - ticket.SentDate.Value).TotalDays;
-
-                            string newWarningColor = "Green";
-                            bool shouldSetUrgent = false;
-
-                            if (diffDays >= 14)
-                            {
-                                newWarningColor = "Red";
-                                shouldSetUrgent = true;
-                            }
-                            else if (diffDays >= 10)
-                            {
-                                newWarningColor = "Yellow";
-                            }
+                            // 3. Tính toán cảnh báo và mức độ khẩn qua SlaCalculator
+                            var (newWarningColor, shouldSetUrgent) = SlaCalculator.Calculate(ticket.SentDate, DateTime.UtcNow);
 
                             // 4. Tối ưu hóa ghi: Chỉ cập nhật nếu WarningColor hoặc IsUrgent thay đổi
                             bool isColorChanged = ticket.WarningColor != newWarningColor;

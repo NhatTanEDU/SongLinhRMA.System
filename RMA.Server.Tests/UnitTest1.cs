@@ -1,8 +1,10 @@
 using RMA.Server.Services;
+using RMA.Server.Entities;
 using RMA.Shared.DTOs;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using Moq;
 using Xunit;
 
 namespace RMA.Server.Tests;

@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllers();
+builder.Services.AddMemoryCache();
 
 // Configure Firebase JWT Authentication
 var projectId = builder.Configuration["Firebase:ProjectId"];

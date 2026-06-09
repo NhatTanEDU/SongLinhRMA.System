@@ -16,7 +16,7 @@ namespace RMA.Server.Services
             _collectionName = collectionName;
         }
 
-        public async Task<List<T>> GetAllAsync()
+        public virtual async Task<List<T>> GetAllAsync()
         {
             var collection = _firestoreDb.Collection(_collectionName);
             var snapshot = await collection.GetSnapshotAsync();
@@ -31,7 +31,7 @@ namespace RMA.Server.Services
             return result;
         }
 
-        public async Task<T?> GetByIdAsync(string id)
+        public virtual async Task<T?> GetByIdAsync(string id)
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             var snapshot = await document.GetSnapshotAsync();
@@ -42,7 +42,7 @@ namespace RMA.Server.Services
             return null;
         }
 
-        public async Task<List<T>> GetByFieldAsync(string fieldName, object value)
+        public virtual async Task<List<T>> GetByFieldAsync(string fieldName, object value)
         {
             var collection = _firestoreDb.Collection(_collectionName);
             var query = collection.WhereEqualTo(fieldName, value);
@@ -58,20 +58,36 @@ namespace RMA.Server.Services
             return result;
         }
 
-        public async Task<string> AddAsync(T entity)
+        public virtual async Task<List<T>> GetPagedAsync(int limit, int offset)
+        {
+            var collection = _firestoreDb.Collection(_collectionName);
+            var query = collection.Offset(offset).Limit(limit);
+            var snapshot = await query.GetSnapshotAsync();
+            var result = new List<T>();
+            foreach (var document in snapshot.Documents)
+            {
+                if (document.Exists)
+                {
+                    result.Add(document.ConvertTo<T>());
+                }
+            }
+            return result;
+        }
+
+        public virtual async Task<string> AddAsync(T entity)
         {
             var collection = _firestoreDb.Collection(_collectionName);
             var docRef = await collection.AddAsync(entity);
             return docRef.Id;
         }
 
-        public async Task UpdateAsync(string id, T entity)
+        public virtual async Task UpdateAsync(string id, T entity)
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             await document.SetAsync(entity, SetOptions.Overwrite);
         }
 
-        public async Task DeleteAsync(string id)
+        public virtual async Task DeleteAsync(string id)
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             await document.DeleteAsync();

@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using RMA.Server.Entities;
 using RMA.Server.Services;
 using RMA.Shared.DTOs;
@@ -23,6 +24,7 @@ public class RmaTicketsController : ControllerBase
     private readonly FirestoreRepository<StatusHistory> _statusHistoryRepo;
     private readonly FirestoreRepository<Location> _locationRepo;
     private readonly IPdfService _pdfService;
+    private readonly IMemoryCache _cache;
 
     public RmaTicketsController(
         FirestoreRepository<RmaTicket> ticketRepo,
@@ -34,7 +36,8 @@ public class RmaTicketsController : ControllerBase
         FirestoreRepository<Attachment> attachmentRepo,
         FirestoreRepository<StatusHistory> statusHistoryRepo,
         FirestoreRepository<Location> locationRepo,
-        IPdfService pdfService)
+        IPdfService pdfService,
+        IMemoryCache cache)
     {
         _ticketRepo = ticketRepo;
         _deviceRepo = deviceRepo;
@@ -46,6 +49,7 @@ public class RmaTicketsController : ControllerBase
         _statusHistoryRepo = statusHistoryRepo;
         _locationRepo = locationRepo;
         _pdfService = pdfService;
+        _cache = cache;
     }
 
     [HttpGet]
@@ -53,15 +57,209 @@ public class RmaTicketsController : ControllerBase
     {
         var tickets = await _ticketRepo.GetAllAsync();
         
-        var devices = (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
-        var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
-        var statuses = (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
-        var vendors = (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
-        var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+        var devices = await _cache.GetOrCreateAsync("devices_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
+        }) ?? new Dictionary<string, Device>();
 
-        var attachmentsGroup = (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
-        var statusHistoriesGroup = (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
-        var locations = (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
+        var customers = await _cache.GetOrCreateAsync("customers_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
+        }) ?? new Dictionary<string, Customer>();
+
+        var statuses = await _cache.GetOrCreateAsync("statuses_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
+        }) ?? new Dictionary<string, StatusMaster>();
+
+        var vendors = await _cache.GetOrCreateAsync("vendors_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
+        }) ?? new Dictionary<string, Vendor>();
+
+        var models = await _cache.GetOrCreateAsync("models_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+        }) ?? new Dictionary<string, Model>();
+
+        var attachmentsGroup = await _cache.GetOrCreateAsync("attachments_group", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        }) ?? new Dictionary<string, List<Attachment>>();
+
+        var statusHistoriesGroup = await _cache.GetOrCreateAsync("histories_group", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        }) ?? new Dictionary<string, List<StatusHistory>>();
+
+        var locations = await _cache.GetOrCreateAsync("locations_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
+        }) ?? new Dictionary<string, Location>();
+
+        var dtos = tickets.Select(t =>
+        {
+            var device = devices.TryGetValue(t.DeviceId, out var d) ? d : null;
+            var customer = customers.TryGetValue(t.CustomerId, out var c) ? c : null;
+            var status = statuses.TryGetValue(t.StatusId, out var s) ? s : null;
+            var vendor = t.VendorId != null && vendors.TryGetValue(t.VendorId, out var v) ? v : null;
+            var model = device != null && models.TryGetValue(device.ModelId, out var m) ? m : null;
+
+            var dto = new RmaTicketDto
+            {
+                Id = t.Id,
+                DeviceId = t.DeviceId,
+                DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
+                DeviceModelName = model?.ModelName ?? string.Empty,
+                
+                CustomerId = t.CustomerId,
+                CustomerName = customer?.Name ?? string.Empty,
+                CustomerPhone = customer?.Phone,
+                CustomerContactPerson = customer?.ContactPerson,
+                CustomerAvatarUrl = customer?.AvatarUrl,
+                
+                StatusId = t.StatusId,
+                StatusName = status?.StatusName ?? string.Empty,
+                StatusColorCode = status?.ColorCode,
+                WarningColor = t.WarningColor,
+                
+                VendorId = t.VendorId,
+                VendorName = vendor?.Name,
+                
+                ProblemDescription = t.ProblemDescription,
+                ServiceMode = t.ServiceMode,
+                ReceivedDate = t.ReceivedDate,
+                SentDate = t.SentDate,
+                IsUrgent = t.IsUrgent,
+                StaffNote = t.StaffNote,
+                EndUserName = t.EndUserName
+            };
+            dto.PopulateChecklistsFromStaffNote();
+
+            if (attachmentsGroup.TryGetValue(t.Id, out var atts))
+            {
+                dto.Attachments = atts.Select(a => new AttachmentDto
+                {
+                    Id = a.Id,
+                    FileUrl = a.FileUrl,
+                    FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
+                    UploadedAt = a.UploadedAt
+                }).ToList();
+            }
+
+            if (statusHistoriesGroup.TryGetValue(t.Id, out var shs))
+            {
+                dto.StatusHistories = shs.Select(sh =>
+                {
+                    var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
+                    var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
+                    return new StatusHistoryDto
+                    {
+                        Id = sh.Id,
+                        StatusName = stName,
+                        LocationName = locName,
+                        Note = sh.Note,
+                        CreatedAt = sh.UpdateTime
+                    };
+                }).OrderByDescending(h => h.CreatedAt).ToList();
+            }
+
+            return dto;
+        }).ToList();
+
+        return Ok(dtos);
+    }
+
+    [HttpGet("paged")]
+    public async Task<ActionResult<IEnumerable<RmaTicketDto>>> GetPaged([FromQuery] TicketPagedRequestDto request)
+    {
+        int pageNumber = request.PageNumber > 0 ? request.PageNumber : 1;
+        int pageSize = request.PageSize > 0 ? request.PageSize : 10;
+
+        List<RmaTicket> tickets;
+
+        if (request.Month.HasValue || !string.IsNullOrEmpty(request.WarningColor))
+        {
+            var allTickets = await _cache.GetOrCreateAsync("all_tickets_list", async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5);
+                return await _ticketRepo.GetAllAsync();
+            }) ?? new List<RmaTicket>();
+
+            tickets = allTickets;
+
+            if (request.Month.HasValue)
+            {
+                tickets = tickets.Where(t => t.ReceivedDate.Month == request.Month.Value || (t.SentDate.HasValue && t.SentDate.Value.Month == request.Month.Value)).ToList();
+            }
+
+            if (!string.IsNullOrEmpty(request.WarningColor))
+            {
+                tickets = tickets.Where(t => string.Equals(t.WarningColor, request.WarningColor, StringComparison.OrdinalIgnoreCase)).ToList();
+            }
+
+            tickets = tickets.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList();
+        }
+        else
+        {
+            tickets = await _ticketRepo.GetPagedAsync(pageSize, (pageNumber - 1) * pageSize);
+        }
+
+        var devices = await _cache.GetOrCreateAsync("devices_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
+        }) ?? new Dictionary<string, Device>();
+
+        var customers = await _cache.GetOrCreateAsync("customers_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
+        }) ?? new Dictionary<string, Customer>();
+
+        var statuses = await _cache.GetOrCreateAsync("statuses_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
+        }) ?? new Dictionary<string, StatusMaster>();
+
+        var vendors = await _cache.GetOrCreateAsync("vendors_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
+        }) ?? new Dictionary<string, Vendor>();
+
+        var models = await _cache.GetOrCreateAsync("models_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+        }) ?? new Dictionary<string, Model>();
+
+        var attachmentsGroup = await _cache.GetOrCreateAsync("attachments_group", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        }) ?? new Dictionary<string, List<Attachment>>();
+
+        var statusHistoriesGroup = await _cache.GetOrCreateAsync("histories_group", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
+            return (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        }) ?? new Dictionary<string, List<StatusHistory>>();
+
+        var locations = await _cache.GetOrCreateAsync("locations_dict", async entry =>
+        {
+            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
+            return (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
+        }) ?? new Dictionary<string, Location>();
 
         var dtos = tickets.Select(t =>
         {

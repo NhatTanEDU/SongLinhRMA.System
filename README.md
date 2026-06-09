@@ -7,7 +7,7 @@ Hệ thống quản lý quy trình bảo hành (RMA - Return Merchandise Authori
 ## 1. Công nghệ sử dụng (Tech Stack)
 
 ### Backend (RMA.Server)
-- **Framework:** ASP.NET Core Web API (.NET 8.0/9.0)
+- **Framework:** ASP.NET Core Web API (.NET 10.0.0)
 - **Database:** Google Cloud Firestore (NoSQL Document DB)
 - **Authentication:** Firebase Auth & JWT Bearer Token (hỗ trợ cả tài khoản Local phục vụ kiểm thử)
 - **Dịch vụ hỗ trợ:**

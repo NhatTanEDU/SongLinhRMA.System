@@ -209,11 +209,11 @@
                                            Label="@(Ticket.IsUrgent ? "⚡ KHẨN CẤP – Ưu tiên xử lý!" : "Mức độ bình thường")" />
                             </MudItem>
                             <MudItem xs="12" md="6">
-                                <MudSelect T="string" Label="Phương thức dịch vụ" @bind-Value="Ticket.ServiceMode"
+                                <MudSelect T="string" Label="Chế độ xử lý *" @bind-Value="Ticket.ServiceMode"
+                                           Required="true" RequiredError="Vui lòng chọn chế độ xử lý!"
                                            Variant="Variant.Outlined">
-                                    <MudSelectItem Value="@("Carry-In")">Mang đến trực tiếp</MudSelectItem>
-                                    <MudSelectItem Value="@("Pickup")">Thu gom tại nhà</MudSelectItem>
-                                    <MudSelectItem Value="@("Remote")">Hỗ trợ từ xa</MudSelectItem>
+                                    <MudSelectItem Value="@("Bảo hành")">Bảo hành</MudSelectItem>
+                                    <MudSelectItem Value="@("Sửa chữa")">Sửa chữa</MudSelectItem>
                                 </MudSelect>
                             </MudItem>
                         </MudGrid>
@@ -384,11 +384,28 @@
         </MudForm>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="Cancel">Hủy</MudButton>
+        @if (string.IsNullOrEmpty(Ticket.Id))
+        {
+            <MudCheckBox T="bool" @bind-Value="_keepFormOpen"
+                         Color="Color.Primary"
+                         Class="ml-4"
+                         Label="Giữ biểu mẫu để nhập liên tục thiết bị tương tự" />
+        }
+        <MudSpacer />
+        <MudButton OnClick="Cancel" Disabled="@_submitting">Hủy</MudButton>
         <MudButton Color="Color.Primary" Variant="Variant.Filled"
                    StartIcon="@Icons.Material.Filled.SaveAlt"
-                   OnClick="Submit">
-            Tiếp nhận & Lưu Phiếu RMA
+                   OnClick="Submit"
+                   Disabled="@_submitting">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Indeterminate="true" />
+                <span class="ms-2">Đang xử lý...</span>
+            }
+            else
+            {
+                <span>Tiếp nhận & Lưu Phiếu RMA</span>
+            }
         </MudButton>
     </DialogActions>
 </MudDialog>
@@ -396,6 +413,7 @@
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public RmaTicketDto Ticket { get; set; } = new();
+    [Parameter] public EventCallback OnTicketCreated { get; set; }
 
     MudForm _form = null!;
     bool _valid;
@@ -632,48 +650,108 @@
         await _form.ValidateAsync();
         if (!_form.IsValid) return;
 
-        // Save pending device customer transfers to DB
-        foreach (var kvp in _pendingDeviceCustomerUpdates)
+        _submitting = true;
+        StateHasChanged();
+
+        try
         {
-            var devToUpdate = _allDevices.FirstOrDefault(d => d.Id == kvp.Key);
-            if (devToUpdate != null)
+            // Save pending device customer transfers to DB
+            foreach (var kvp in _pendingDeviceCustomerUpdates)
             {
-                var updateDto = new DeviceCreateDto
+                var devToUpdate = _allDevices.FirstOrDefault(d => d.Id == kvp.Key);
+                if (devToUpdate != null)
                 {
-                    SerialNumber = devToUpdate.SerialNumber,
-                    CustomerId = kvp.Value,
-                    ModelId = devToUpdate.ModelId,
-                    PurchaseDate = devToUpdate.PurchaseDate,
-                    WarrantyExpiry = devToUpdate.WarrantyExpiry
-                };
-                await DeviceService.UpdateDeviceAsync(devToUpdate.Id, updateDto);
+                    var updateDto = new DeviceCreateDto
+                    {
+                        SerialNumber = devToUpdate.SerialNumber,
+                        CustomerId = kvp.Value,
+                        ModelId = devToUpdate.ModelId,
+                        PurchaseDate = devToUpdate.PurchaseDate,
+                        WarrantyExpiry = devToUpdate.WarrantyExpiry
+                    };
+                    await DeviceService.UpdateDeviceAsync(devToUpdate.Id, updateDto);
+                }
+            }
+            _pendingDeviceCustomerUpdates.Clear();
+
+            // Build StaffNote with logistics metadata
+            var accStr = _selectedAcc.Any() ? string.Join(", ", _selectedAcc) : "Không có";
+            var bh     = _warrantyActive ? "Còn BH" : "Hết BH";
+            var meta   = $"[Vị trí: {_location}] [BH: {bh}] [Phụ kiện: {accStr}]";
+            
+            var originalStaffNote = Ticket.StaffNote;
+            Ticket.StaffNote = string.IsNullOrWhiteSpace(originalStaffNote)
+                ? meta
+                : $"{meta}\n{originalStaffNote}";
+
+            Ticket.SentDate = _sentDate;
+
+            var cust = _customers.FirstOrDefault(c => c.Id == Ticket.CustomerId);
+            Ticket.CustomerName  = cust?.Name ?? "";
+            Ticket.CustomerPhone = cust?.Phone;
+            Ticket.CustomerContactPerson = cust?.ContactPerson;
+
+            var dev = _allDevices.FirstOrDefault(d => d.Id == Ticket.DeviceId);
+            Ticket.DeviceSerialNumber = dev?.SerialNumber ?? "";
+            Ticket.DeviceModelName    = dev?.ModelName ?? "";
+
+            var st = _statuses.FirstOrDefault(s => s.Id == Ticket.StatusId);
+            Ticket.StatusName      = st?.StatusName ?? "";
+            Ticket.StatusColorCode = st?.ColorCode;
+
+            if (_keepFormOpen && string.IsNullOrEmpty(Ticket.Id))
+            {
+                var created = await TicketService.CreateRmaTicketAsync(Ticket);
+                
+                // Restore original staff note so the UI doesn't display the metadata prefix
+                Ticket.StaffNote = originalStaffNote;
+
+                if (created != null)
+                {
+                    Snackbar.Add($"✅ Đã tạo Ticket thành công cho S/N: {created.DeviceSerialNumber}!", Severity.Success);
+                    
+                    if (OnTicketCreated.HasDelegate)
+                    {
+                        await OnTicketCreated.InvokeAsync();
+                    }
+
+                    // Reset fields for next device
+                    Ticket.DeviceId = "";
+                    Ticket.DeviceSerialNumber = "";
+                    Ticket.DeviceModelName = "";
+                    Ticket.Attachments.Clear();
+                    _newDeviceSerial = "";
+
+                    _allDevices = await DeviceService.GetDevicesAsync();
+                    if (!string.IsNullOrEmpty(Ticket.CustomerId))
+                    {
+                        _filteredDevices = _allDevices.Where(d => d.CustomerId == Ticket.CustomerId).ToList();
+                    }
+
+                    UpdateBrand();
+                    await _form.ResetValidationAsync();
+                }
+                else
+                {
+                    Snackbar.Add("Thêm Phiếu RMA thất bại!", Severity.Error);
+                }
+            }
+            else
+            {
+                // Restore original staff note before closing if we aren't saving inside the dialog
+                Ticket.StaffNote = originalStaffNote;
+                MudDialog.Close(DialogResult.Ok(Ticket));
             }
         }
-
-        // Build StaffNote with logistics metadata
-        var accStr = _selectedAcc.Any() ? string.Join(", ", _selectedAcc) : "Không có";
-        var bh     = _warrantyActive ? "Còn BH" : "Hết BH";
-        var meta   = $"[Vị trí: {_location}] [BH: {bh}] [Phụ kiện: {accStr}]";
-        Ticket.StaffNote = string.IsNullOrWhiteSpace(Ticket.StaffNote)
-            ? meta
-            : $"{meta}\n{Ticket.StaffNote}";
-
-        Ticket.SentDate = _sentDate;
-
-        var cust = _customers.FirstOrDefault(c => c.Id == Ticket.CustomerId);
-        Ticket.CustomerName  = cust?.Name ?? "";
-        Ticket.CustomerPhone = cust?.Phone;
-        Ticket.CustomerContactPerson = cust?.ContactPerson;
-
-        var dev = _allDevices.FirstOrDefault(d => d.Id == Ticket.DeviceId);
-        Ticket.DeviceSerialNumber = dev?.SerialNumber ?? "";
-        Ticket.DeviceModelName    = dev?.ModelName ?? "";
-
-        var st = _statuses.FirstOrDefault(s => s.Id == Ticket.StatusId);
-        Ticket.StatusName      = st?.StatusName ?? "";
-        Ticket.StatusColorCode = st?.ColorCode;
-
-        MudDialog.Close(DialogResult.Ok(Ticket));
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _submitting = false;
+            StateHasChanged();
+        }
     }
 
     async Task OpenAddModelDialog()
@@ -702,6 +780,8 @@
     void Cancel() => MudDialog.Cancel();
 
     private bool _uploading;
+    private bool _submitting;
+    private bool _keepFormOpen;
 
     private async Task OnFilesChanged(IReadOnlyList<IBrowserFile> files)
     {

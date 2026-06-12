@@ -10,6 +10,7 @@ namespace RMA.Shared.DTOs
         public string DeviceId { get; set; } = string.Empty;
         public string DeviceSerialNumber { get; set; } = string.Empty;
         public string DeviceModelName { get; set; } = string.Empty;
+        public DateTime? DeviceWarrantyExpiry { get; set; }
         
         public string CustomerId { get; set; } = string.Empty;
         public string CustomerName { get; set; } = string.Empty;
@@ -24,6 +25,7 @@ namespace RMA.Shared.DTOs
         
         public string? VendorId { get; set; }
         public string? VendorName { get; set; }
+        public string? VendorWarrantyLink { get; set; }
         
         public string ProblemDescription { get; set; } = string.Empty;
         public string? ServiceMode { get; set; }

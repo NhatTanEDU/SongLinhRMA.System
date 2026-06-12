@@ -6,7 +6,13 @@
 <MudDialog>
     <DialogContent>
         <MudForm @ref="form" @bind-IsValid="@success">
-            <MudTextField @bind-Value="Device.SerialNumber" Label="Số Serial (S/N)" Required="true" RequiredError="Serial là bắt buộc!" />
+            <MudTextField T="string"
+                          Value="Device.SerialNumber" 
+                          ValueChanged="OnSerialNumberChanged" 
+                          Immediate="true"
+                          Label="Số Serial (S/N)" 
+                          Required="true" 
+                          RequiredError="Serial là bắt buộc!" />
             
             <MudSelect T="string" Label="Khách hàng" @bind-Value="Device.CustomerId" Required="true" RequiredError="Chọn khách hàng!">
                 @foreach (var c in customers)
@@ -15,7 +21,10 @@
                 }
             </MudSelect>
 
-            <MudSelect T="string" Label="Model thiết bị" @bind-Value="Device.ModelId" Required="true" RequiredError="Chọn model!">
+            <MudSelect T="string" Label="Model thiết bị" 
+                       Value="Device.ModelId" 
+                       ValueChanged="OnModelChanged"
+                       Required="true" RequiredError="Chọn model!">
                 @foreach (var m in models)
                 {
                     <MudSelectItem Value="@m.Id">@($"{m.Brand} - {m.ModelName}")</MudSelectItem>
@@ -23,7 +32,26 @@
             </MudSelect>
 
             <MudDatePicker Label="Ngày mua" @bind-Date="Device.PurchaseDate" />
-            <MudDatePicker Label="Ngày hết hạn bảo hành" @bind-Date="Device.WarrantyExpiry" />
+
+            <div class="d-flex align-center gap-2 mt-4">
+                <MudDatePicker Label="Ngày hết hạn bảo hành" 
+                               @bind-Date="Device.WarrantyExpiry"
+                               ReadOnly="@(isAutoCalculated && !isUnlockedManual)"
+                               HelperText="@(isAutoCalculated ? "Đã tự động tính 24 tháng bảo hành từ mã vạch hãng APC" : "")"
+                               Adornment="@(isAutoCalculated ? Adornment.End : Adornment.None)"
+                               AdornmentIcon="@Icons.Material.Filled.CheckCircle"
+                               AdornmentColor="Color.Success"
+                               Class="flex-grow-1" />
+                @if (isAutoCalculated)
+                {
+                    <MudTooltip Text="@(isUnlockedManual ? "Khóa lại" : "Mở khóa để chỉnh sửa thủ công")">
+                        <MudIconButton Icon="@(isUnlockedManual ? Icons.Material.Filled.LockOpen : Icons.Material.Filled.Lock)"
+                                       Color="@(isUnlockedManual ? Color.Warning : Color.Default)"
+                                       OnClick="ToggleLock"
+                                       Class="mt-4" />
+                    </MudTooltip>
+                }
+            </div>
         </MudForm>
     </DialogContent>
     <DialogActions>
@@ -43,10 +71,90 @@
     bool success;
     MudForm form = null!;
 
+    private bool isAutoCalculated = false;
+    private bool isUnlockedManual = false;
+
     protected override async Task OnInitializedAsync()
     {
         customers = await CustomerService.GetCustomersAsync();
         models = await ReferenceService.GetModelsAsync();
+        
+        CalculateApcWarranty();
+    }
+
+    private void OnSerialNumberChanged(string sn)
+    {
+        Device.SerialNumber = sn;
+        CalculateApcWarranty();
+    }
+
+    private void OnModelChanged(string modelId)
+    {
+        Device.ModelId = modelId;
+        CalculateApcWarranty();
+    }
+
+    private void ToggleLock()
+    {
+        isUnlockedManual = !isUnlockedManual;
+    }
+
+    private void CalculateApcWarranty()
+    {
+        var selectedModel = models.FirstOrDefault(m => m.Id == Device.ModelId);
+        bool isApc = selectedModel != null && 
+                     ((selectedModel.ModelName != null && selectedModel.ModelName.Contains("APC", StringComparison.OrdinalIgnoreCase)) ||
+                      (selectedModel.Brand != null && selectedModel.Brand.Contains("APC", StringComparison.OrdinalIgnoreCase)));
+
+        if (!isApc)
+        {
+            if (isAutoCalculated)
+            {
+                Device.WarrantyExpiry = null;
+                isAutoCalculated = false;
+                isUnlockedManual = false;
+            }
+            return;
+        }
+
+        string sn = Device.SerialNumber ?? "";
+        if (sn.Length >= 6 && 
+            char.IsDigit(sn[2]) && char.IsDigit(sn[3]) && 
+            char.IsDigit(sn[4]) && char.IsDigit(sn[5]))
+        {
+            if (int.TryParse(sn.Substring(2, 2), out int yearVal) &&
+                int.TryParse(sn.Substring(4, 2), out int weekVal))
+            {
+                if (weekVal >= 1 && weekVal <= 53)
+                {
+                    int fullYear = 2000 + yearVal;
+                    if (yearVal > 80)
+                    {
+                        fullYear = 1900 + yearVal;
+                    }
+
+                    try
+                    {
+                        DateTime jan1 = new DateTime(fullYear, 1, 1);
+                        DateTime mfgDate = jan1.AddDays((weekVal - 1) * 7);
+                        Device.WarrantyExpiry = mfgDate.AddMonths(24);
+                        isAutoCalculated = true;
+                        return;
+                    }
+                    catch
+                    {
+                        // Ignore date math errors
+                    }
+                }
+            }
+        }
+
+        if (isAutoCalculated)
+        {
+            Device.WarrantyExpiry = null;
+            isAutoCalculated = false;
+            isUnlockedManual = false;
+        }
     }
 
     async Task Submit()

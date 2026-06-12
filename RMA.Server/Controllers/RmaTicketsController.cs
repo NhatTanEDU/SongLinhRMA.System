@@ -119,6 +119,7 @@ public class RmaTicketsController : ControllerBase
                 DeviceId = t.DeviceId,
                 DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
                 DeviceModelName = model?.ModelName ?? string.Empty,
+                DeviceWarrantyExpiry = device?.WarrantyExpiry,
                 
                 CustomerId = t.CustomerId,
                 CustomerName = customer?.Name ?? string.Empty,
@@ -133,6 +134,7 @@ public class RmaTicketsController : ControllerBase
                 
                 VendorId = t.VendorId,
                 VendorName = vendor?.Name,
+                VendorWarrantyLink = vendor?.WarrantyLink,
                 
                 ProblemDescription = t.ProblemDescription,
                 ServiceMode = t.ServiceMode,
@@ -275,6 +277,7 @@ public class RmaTicketsController : ControllerBase
                 DeviceId = t.DeviceId,
                 DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
                 DeviceModelName = model?.ModelName ?? string.Empty,
+                DeviceWarrantyExpiry = device?.WarrantyExpiry,
                 
                 CustomerId = t.CustomerId,
                 CustomerName = customer?.Name ?? string.Empty,
@@ -289,6 +292,7 @@ public class RmaTicketsController : ControllerBase
                 
                 VendorId = t.VendorId,
                 VendorName = vendor?.Name,
+                VendorWarrantyLink = vendor?.WarrantyLink,
                 
                 ProblemDescription = t.ProblemDescription,
                 ServiceMode = t.ServiceMode,
@@ -381,6 +385,7 @@ public class RmaTicketsController : ControllerBase
             DeviceId = t.DeviceId,
             DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
             DeviceModelName = model?.ModelName ?? string.Empty,
+            DeviceWarrantyExpiry = device?.WarrantyExpiry,
             
             CustomerId = t.CustomerId,
             CustomerName = customer?.Name ?? string.Empty,
@@ -395,6 +400,7 @@ public class RmaTicketsController : ControllerBase
             
             VendorId = t.VendorId,
             VendorName = vendor?.Name,
+            VendorWarrantyLink = vendor?.WarrantyLink,
             
             ProblemDescription = t.ProblemDescription,
             ServiceMode = t.ServiceMode,
@@ -650,6 +656,7 @@ public class RmaTicketsController : ControllerBase
             DeviceId = t.DeviceId,
             DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
             DeviceModelName = model?.ModelName ?? string.Empty,
+            DeviceWarrantyExpiry = device?.WarrantyExpiry,
             
             CustomerId = t.CustomerId,
             CustomerName = customer?.Name ?? string.Empty,
@@ -664,6 +671,7 @@ public class RmaTicketsController : ControllerBase
             
             VendorId = t.VendorId,
             VendorName = vendor?.Name,
+            VendorWarrantyLink = vendor?.WarrantyLink,
             
             ProblemDescription = t.ProblemDescription,
             ServiceMode = t.ServiceMode,
@@ -705,6 +713,7 @@ public class RmaTicketsController : ControllerBase
             DeviceId = t.DeviceId,
             DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
             DeviceModelName = model?.ModelName ?? string.Empty,
+            DeviceWarrantyExpiry = device?.WarrantyExpiry,
             
             CustomerId = t.CustomerId,
             CustomerName = customerName,
@@ -718,6 +727,7 @@ public class RmaTicketsController : ControllerBase
             
             VendorId = t.VendorId,
             VendorName = vendor?.Name,
+            VendorWarrantyLink = vendor?.WarrantyLink,
             
             ProblemDescription = t.ProblemDescription,
             ServiceMode = t.ServiceMode,

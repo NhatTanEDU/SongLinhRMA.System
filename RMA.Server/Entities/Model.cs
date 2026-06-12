@@ -27,6 +27,15 @@ namespace RMA.Server.Entities
         [FirestoreProperty]
         public string ModelName { get; set; } = string.Empty;
 
+        [FirestoreProperty]
+        public int StockQuantity { get; set; }
+
+        [FirestoreProperty]
+        public int WarrantyMonths { get; set; }
+
+        [FirestoreProperty]
+        public bool IsSerialRequired { get; set; }
+
         // Navigation properties
         public ICollection<Device> Devices { get; set; } = new List<Device>();
     }

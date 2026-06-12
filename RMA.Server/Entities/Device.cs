@@ -30,5 +30,8 @@ namespace RMA.Server.Entities
 
         [FirestoreProperty]
         public DateTime? WarrantyExpiry { get; set; }
+
+        [FirestoreProperty]
+        public string? OrderId { get; set; }
     }
 }

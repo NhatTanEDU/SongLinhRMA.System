@@ -25,6 +25,9 @@ namespace RMA.Shared.DTOs
         public string ModelName { get; set; } = string.Empty;
         public string? Brand { get; set; }
         public string CategoryId { get; set; } = string.Empty;
+        public int StockQuantity { get; set; }
+        public int WarrantyMonths { get; set; }
+        public bool IsSerialRequired { get; set; }
     }
 
     public class LocationDto

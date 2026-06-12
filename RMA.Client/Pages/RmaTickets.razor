@@ -48,6 +48,7 @@
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Hãng</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Mô tả lỗi</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Trạng thái</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Hạn BH</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Ngày nhận</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Cảnh báo SLA</MudText></MudTh>
         <MudTh Style="text-align: right"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
@@ -114,6 +115,25 @@
                     <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Gấp</MudChip>
                 }
             </div>
+        </MudTd>
+        <MudTd DataLabel="Hạn BH">
+            @if (context.DeviceWarrantyExpiry.HasValue)
+            {
+                var isActive = context.DeviceWarrantyExpiry.Value > DateTime.Now;
+                <MudTooltip Text="@($"Hạn BH: {context.DeviceWarrantyExpiry.Value:dd/MM/yyyy}")">
+                    <MudChip T="string"
+                             Color="@(isActive ? Color.Success : Color.Error)"
+                             Size="Size.Small"
+                             Icon="@(isActive ? Icons.Material.Filled.Verified : Icons.Material.Filled.GppBad)"
+                             Variant="Variant.Filled">
+                        @(isActive ? "Còn BH" : "Hết BH")
+                    </MudChip>
+                </MudTooltip>
+            }
+            else
+            {
+                <MudChip T="string" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small">N/A</MudChip>
+            }
         </MudTd>
         <MudTd DataLabel="Ngày nhận">
             <MudText Typo="Typo.body2">N: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
@@ -354,7 +374,8 @@
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
         var parameters = new DialogParameters
         {
-            ["Ticket"] = new RmaTicketDto()
+            ["Ticket"] = new RmaTicketDto(),
+            ["OnTicketCreated"] = EventCallback.Factory.Create(this, LoadData)
         };
 
         var dialog = await DialogService.ShowAsync<RmaTicketDialog>("Tạo RMA Ticket Mới", parameters, options);
@@ -392,6 +413,8 @@
             WarningColor = ticket.WarningColor,
             VendorId = ticket.VendorId,
             VendorName = ticket.VendorName,
+            VendorWarrantyLink = ticket.VendorWarrantyLink,
+            DeviceWarrantyExpiry = ticket.DeviceWarrantyExpiry,
             ProblemDescription = ticket.ProblemDescription,
             ServiceMode = ticket.ServiceMode,
             ReceivedDate = ticket.ReceivedDate,
@@ -439,6 +462,8 @@
             WarningColor = ticket.WarningColor,
             VendorId = ticket.VendorId,
             VendorName = ticket.VendorName,
+            VendorWarrantyLink = ticket.VendorWarrantyLink,
+            DeviceWarrantyExpiry = ticket.DeviceWarrantyExpiry,
             ProblemDescription = ticket.ProblemDescription,
             ServiceMode = ticket.ServiceMode,
             ReceivedDate = ticket.ReceivedDate,
@@ -451,7 +476,11 @@
             StatusHistories = ticket.StatusHistories
         };
 
-        var parameters = new DialogParameters { ["Ticket"] = ticketCopy };
+        var parameters = new DialogParameters 
+        { 
+            ["Ticket"] = ticketCopy,
+            ["OnTicketUpdated"] = EventCallback.Factory.Create<RmaTicketDto>(this, async (updatedTicket) => { await LoadData(); })
+        };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.ExtraLarge, FullWidth = true };
         var dialog = await DialogService.ShowAsync<RmaTicketDetailDialog>("Chi tiết Phiếu RMA", parameters, options);
         var result = await dialog.Result;

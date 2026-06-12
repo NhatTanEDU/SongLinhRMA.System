@@ -1,0 +1,98 @@
+@page "/sales/create"
+@using RMA.Shared.DTOs
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager NavigationManager
+
+<MudText Typo="Typo.h4" Class="mb-4">Tạo Đơn Hàng Bán</MudText>
+
+<MudPaper Class="pa-4">
+    <MudGrid>
+        <MudItem xs="12" md="6">
+            <MudSelect T="string" Label="Khách Hàng" @bind-Value="createDto.CustomerId" Required="true">
+                @foreach (var c in customers)
+                {
+                    <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+
+    <MudText Typo="Typo.h6" Class="mt-6 mb-2">Danh sách Sản phẩm</MudText>
+    
+    @foreach (var detail in createDto.Details)
+    {
+        <MudGrid Class="align-center mb-2">
+            <MudItem xs="12" md="4">
+                <MudSelect T="string" Label="Sản phẩm (Model)" @bind-Value="detail.ModelId" Required="true">
+                    @foreach (var m in models)
+                    {
+                        <MudSelectItem Value="@m.Id">@m.ModelName (Kho: @m.StockQuantity)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudNumericField @bind-Value="detail.Quantity" Label="Số lượng" Min="1" />
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudTextField @bind-Value="detail.Note" Label="Ghi chú" />
+            </MudItem>
+            <MudItem xs="12" md="2">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => createDto.Details.Remove(detail))" />
+            </MudItem>
+        </MudGrid>
+    }
+
+    <MudButton Class="mt-4" StartIcon="@Icons.Material.Filled.Add" Variant="Variant.Outlined" Color="Color.Primary" OnClick="AddDetail">Thêm Sản phẩm</MudButton>
+
+    <div class="mt-8 d-flex justify-end gap-2">
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveOrder">Lưu Đơn Hàng</MudButton>
+    </div>
+</MudPaper>
+
+@code {
+    private SalesOrderCreateDto createDto = new SalesOrderCreateDto();
+    private List<CustomerDto> customers = new();
+    private List<ModelDto> models = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var custResp = await Http.GetFromJsonAsync<List<CustomerDto>>("api/customers");
+        if (custResp != null) customers = custResp;
+
+        var modResp = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models");
+        if (modResp != null) models = modResp;
+    }
+
+    private void AddDetail()
+    {
+        createDto.Details.Add(new OrderDetailCreateDto { Quantity = 1 });
+    }
+
+    private async Task SaveOrder()
+    {
+        if (string.IsNullOrEmpty(createDto.CustomerId))
+        {
+            Snackbar.Add("Vui lòng chọn Khách Hàng", Severity.Warning);
+            return;
+        }
+
+        if (!createDto.Details.Any())
+        {
+            Snackbar.Add("Vui lòng thêm ít nhất 1 sản phẩm", Severity.Warning);
+            return;
+        }
+
+        var response = await Http.PostAsJsonAsync("api/salesorders", createDto);
+        if (response.IsSuccessStatusCode)
+        {
+            Snackbar.Add("Tạo đơn hàng thành công!", Severity.Success);
+            NavigationManager.NavigateTo("/"); // Return to home or sales list
+        }
+        else
+        {
+            Snackbar.Add("Lỗi khi tạo đơn hàng", Severity.Error);
+        }
+    }
+}

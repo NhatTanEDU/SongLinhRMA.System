@@ -93,6 +93,7 @@ builder.Services.AddScoped<FirestoreRepository<Location>>(provider => new Firest
 builder.Services.AddScoped<FirestoreRepository<RmaTicket>>(provider => new FirestoreRepository<RmaTicket>(provider.GetRequiredService<FirestoreDb>(), "rma_tickets"));
 builder.Services.AddScoped<FirestoreRepository<Attachment>>(provider => new FirestoreRepository<Attachment>(provider.GetRequiredService<FirestoreDb>(), "attachments"));
 builder.Services.AddScoped<FirestoreRepository<StatusHistory>>(provider => new FirestoreRepository<StatusHistory>(provider.GetRequiredService<FirestoreDb>(), "status_histories"));
+builder.Services.AddScoped<FirestoreRepository<SalesOrder>>(provider => new FirestoreRepository<SalesOrder>(provider.GetRequiredService<FirestoreDb>(), "sales_orders"));
 
 // Firebase Cloud Messaging (FCM)
 builder.Services.AddSingleton<IFcmService, FcmService>();

@@ -2,6 +2,7 @@
 @using RMA.Client.Services
 @inject IRmaTicketService TicketService
 @inject CustomerService CustomerService
+@inject DeviceService DeviceService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
@@ -13,11 +14,6 @@
                 <MudIcon Icon="@Icons.Material.Filled.Assignment" Color="Color.Primary" />
                 <MudText Typo="Typo.h6"><b>Chi tiết Phiếu RMA #@Ticket.Id.Substring(0, Math.Min(8, Ticket.Id.Length))</b></MudText>
             </div>
-            <MudTooltip Text="@(isEditing ? "Hủy chỉnh sửa" : "Chỉnh sửa tại chỗ")">
-                <MudToggleIconButton @bind-Toggled="isEditing"
-                                     Icon="@Icons.Material.Filled.Edit" Color="Color.Default"
-                                     ToggledIcon="@Icons.Material.Filled.EditOff" ToggledColor="Color.Warning" />
-            </MudTooltip>
         </div>
     </TitleContent>
     <DialogContent>
@@ -27,45 +23,132 @@
                 <MudCard Elevation="1" Class="h-100 rounded-lg">
                     <MudCardHeader>
                         <CardHeaderContent>
-                            <MudText Typo="Typo.subtitle1" Color="Color.Primary"><b>1. Thông Tin Định Danh</b></MudText>
+                            <MudText Typo="Typo.subtitle1" Color="Color.Primary"><b>1. Thông Tin Thiết Bị & Định Danh</b></MudText>
                         </CardHeaderContent>
                         <CardHeaderActions>
-                            <MudIcon Icon="@Icons.Material.Filled.Badge" Color="Color.Primary" />
+                            @if (!isEditing)
+                            {
+                                <MudTooltip Text="Chỉnh sửa nhanh thông tin thiết bị">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="StartEditing" Size="Size.Small" />
+                                </MudTooltip>
+                            }
+                            else
+                            {
+                                <MudIcon Icon="@Icons.Material.Filled.Badge" Color="Color.Primary" />
+                            }
                         </CardHeaderActions>
                     </MudCardHeader>
                     <MudCardContent>
                         <MudGrid Spacing="1">
-                            <MudItem xs="12">
-                                <MudTextField Value="@Ticket.CustomerName" Label="Khách hàng (Công ty)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="6">
-                                <MudTextField Value="@Ticket.CustomerContactPerson" Label="Người đại diện" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="6">
-                                <MudTextField Value="@Ticket.CustomerPhone" Label="Số điện thoại" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                <MudTextField @bind-Value="Ticket.EndUserName" Label="Người dùng cuối / Phòng ban" ReadOnly="@(!isEditing)" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="6">
-                                <MudTextField Value="@Ticket.DeviceModelName" Label="Model Thiết bị" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="6">
-                                <MudTextField Value="@Ticket.DeviceSerialNumber" Label="Serial Number (S/N)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                            </MudItem>
-                            <MudItem xs="12">
-                                @if(isEditing)
-                                {
+                            @if (!isEditing)
+                            {
+                                <MudItem xs="12" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Khách hàng (Công ty)</MudText>
+                                    <MudText Typo="Typo.body1" Class="fw-bold">@Ticket.CustomerName</MudText>
+                                </MudItem>
+                                <MudItem xs="6" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Người đại diện</MudText>
+                                    <MudText Typo="Typo.body1">@Ticket.CustomerContactPerson</MudText>
+                                </MudItem>
+                                <MudItem xs="6" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Số điện thoại</MudText>
+                                    <MudText Typo="Typo.body1">@Ticket.CustomerPhone</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Người dùng cuối / Phòng ban</MudText>
+                                    <MudText Typo="Typo.body1">@(string.IsNullOrEmpty(Ticket.EndUserName) ? "Chưa có" : Ticket.EndUserName)</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Model Thiết bị</MudText>
+                                    <MudText Typo="Typo.body1" Class="fw-bold">@Ticket.DeviceModelName</MudText>
+                                </MudItem>
+                                <MudItem xs="12" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Serial Number (S/N)</MudText>
+                                    <div class="d-flex align-center gap-2">
+                                        <MudText Typo="Typo.body1" Class="fw-bold">
+                                            @Ticket.DeviceSerialNumber
+                                            @if (isApcDevice && _apcExpiryDate.HasValue)
+                                            {
+                                                <span style="color: var(--mud-palette-success); font-weight: bold; margin-left: 8px; font-size: 0.9rem;">
+                                                    ✅ APC Smart (Hạn BH: @_apcExpiryDate.Value.ToString("dd/MM/yyyy") - @(_warrantyActive ? "Còn BH" : "Hết BH"))
+                                                </span>
+                                            }
+                                        </MudText>
+                                        @if (!string.IsNullOrEmpty(Ticket.DeviceSerialNumber))
+                                        {
+                                            <MudTooltip Text="Copy S/N và mở trang tra cứu bảo hành của hãng">
+                                                <MudIconButton Icon="@Icons.Material.Filled.OpenInNew"
+                                                               Size="Size.Small"
+                                                               Color="Color.Primary"
+                                                               Variant="Variant.Outlined"
+                                                               OnClick="LookupWarranty" />
+                                            </MudTooltip>
+                                        }
+                                    </div>
+                                </MudItem>
+                                <MudItem xs="12" Class="mb-2">
+                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Chế độ xử lý (Dịch vụ)</MudText>
+                                    <MudText Typo="Typo.body1">@Ticket.ServiceMode</MudText>
+                                </MudItem>
+                            }
+                            else
+                            {
+                                <MudItem xs="12">
+                                    <MudTextField Value="@Ticket.CustomerName" Label="Khách hàng (Công ty)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudTextField Value="@Ticket.CustomerContactPerson" Label="Người đại diện" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="6">
+                                    <MudTextField Value="@Ticket.CustomerPhone" Label="Số điện thoại" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudTextField @bind-Value="Ticket.EndUserName" Label="Người dùng cuối / Phòng ban" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                </MudItem>
+                                <MudItem xs="12">
+                                    <MudSelect T="string" Label="Thiết bị (Model – S/N) *"
+                                               Value="Ticket.DeviceId"
+                                               ValueChanged="OnDeviceSelected"
+                                               Required="true" RequiredError="Vui lòng chọn thiết bị!"
+                                               Variant="Variant.Outlined" Margin="Margin.Dense">
+                                        @foreach (var d in _filteredDevices)
+                                        {
+                                            <MudSelectItem Value="@d.Id">@d.SerialNumber – @d.ModelName</MudSelectItem>
+                                        }
+                                    </MudSelect>
+                                    @if (isApcDevice && _apcExpiryDate.HasValue)
+                                    {
+                                        <div class="d-flex align-center gap-1 mt-1 text-success" style="font-size: 0.85rem;">
+                                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Color="Color.Success" Size="Size.Small" />
+                                            <span>Thiết bị APC: Tự động nhận diện bảo hành đến @_apcExpiryDate.Value.ToString("dd/MM/yyyy") (@(_warrantyActive ? "Còn BH" : "Hết BH"))</span>
+                                        </div>
+                                    }
+                                    @if (!string.IsNullOrEmpty(Ticket.DeviceSerialNumber))
+                                    {
+                                        <div class="d-flex align-center gap-1 mt-1">
+                                            <MudButton Variant="Variant.Outlined"
+                                                       Color="Color.Info"
+                                                       Size="Size.Small"
+                                                       StartIcon="@Icons.Material.Filled.OpenInNew"
+                                                       OnClick="LookupWarranty">
+                                                Tra cứu bảo hành hãng
+                                            </MudButton>
+                                        </div>
+                                    }
+                                </MudItem>
+                                <MudItem xs="12">
                                     <MudSelect T="string" @bind-Value="Ticket.ServiceMode" Label="Chế độ xử lý" Variant="Variant.Outlined" Margin="Margin.Dense" AnchorOrigin="Origin.BottomCenter">
                                         <MudSelectItem Value="@("Bảo hành")">Bảo hành</MudSelectItem>
                                         <MudSelectItem Value="@("Sửa chữa")">Sửa chữa</MudSelectItem>
                                     </MudSelect>
-                                }
-                                else
-                                {
-                                    <MudTextField Value="@Ticket.ServiceMode" Label="Chế độ xử lý (Dịch vụ)" ReadOnly="true" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                                }
-                            </MudItem>
+                                </MudItem>
+                                <MudItem xs="12" Class="d-flex align-center justify-end gap-2 mt-3">
+                                    <MudButton StartIcon="@Icons.Material.Filled.Cancel" Color="Color.Default" Variant="Variant.Outlined" Size="Size.Small" OnClick="CancelEditing">Hủy</MudButton>
+                                    <MudButton StartIcon="@Icons.Material.Filled.Save" Color="Color.Primary" Variant="Variant.Filled" Size="Size.Small" OnClick="UpdateDevice" Disabled="@isSaving">
+                                        @(isSaving ? "Đang lưu..." : "Cập nhật")
+                                    </MudButton>
+                                </MudItem>
+                            }
                         </MudGrid>
                     </MudCardContent>
                 </MudCard>
@@ -171,36 +254,93 @@
                         <MudGrid Spacing="2">
                             <MudItem xs="12" md="4">
                                 <MudText Typo="Typo.body2" Class="mb-2 fw-bold">Checklist Phụ kiện nhận kèm:</MudText>
-                                @if (Ticket.Checklists != null && Ticket.Checklists.Any(item => item.IsChecked))
+                                @if (isEditing)
                                 {
-                                    <div class="d-flex flex-wrap gap-2">
-                                        @foreach (var item in Ticket.Checklists.Where(item => item.IsChecked))
+                                    <div class="d-flex flex-wrap">
+                                        @foreach (var acc in _accessories)
                                         {
-                                            <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
-                                                ✓ @item.ItemName
-                                            </MudChip>
+                                            <span class="acc-chip @(_selectedAcc.Contains(acc) ? "selected" : "")"
+                                                  @onclick="@(() => ToggleAcc(acc))"
+                                                  style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 20px; margin: 3px; font-size: 0.8rem; cursor: pointer; transition: all 0.2s; border: 1.5px solid #c5c6f7; background: #fff; color: #5b5fc7; user-select: none; @(_selectedAcc.Contains(acc) ? "background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; border-color: transparent; box-shadow: 0 2px 8px rgba(102,126,234,0.35);" : "")">
+                                                @(_selectedAcc.Contains(acc) ? "✓" : "+") @acc
+                                            </span>
                                         }
+                                    </div>
+                                    <div class="d-flex align-center gap-2 mt-2">
+                                        <MudTextField @bind-Value="_customAcc" Label="Thêm phụ kiện khác..."
+                                                      Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" />
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Size="Size.Small"
+                                                   OnClick="AddCustomAcc">Thêm</MudButton>
                                     </div>
                                 }
                                 else
                                 {
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Không có phụ kiện đính kèm được ghi nhận.</MudText>
+                                    @if (Ticket.Checklists != null && Ticket.Checklists.Any(item => item.IsChecked))
+                                    {
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @foreach (var item in Ticket.Checklists.Where(item => item.IsChecked))
+                                            {
+                                                <MudChip T="string" Color="Color.Success" Variant="Variant.Outlined" Size="Size.Small">
+                                                    ✓ @item.ItemName
+                                                </MudChip>
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Không có phụ kiện đính kèm được ghi nhận.</MudText>
+                                    }
                                 }
                             </MudItem>
                             <MudItem xs="12" md="8">
                                 <MudText Typo="Typo.body2" Class="mb-2 fw-bold">Hình ảnh hiện trạng:</MudText>
-                                @if (Ticket.Attachments != null && Ticket.Attachments.Any())
+                                @if (isEditing)
                                 {
-                                    <div class="d-flex flex-wrap gap-2">
-                                        @foreach (var img in Ticket.Attachments)
+                                    <div class="d-flex align-center gap-3 mb-2">
+                                        <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="OnFilesChanged" Accept=".jpg,.jpeg,.png" MaximumFileCount="5">
+                                            <ActivatorContent>
+                                                <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.CloudUpload">
+                                                    Chọn ảnh tải lên...
+                                                </MudButton>
+                                            </ActivatorContent>
+                                        </MudFileUpload>
+                                        @if (_uploading)
                                         {
-                                            <MudImage Src="@img.FileUrl" Alt="@img.FileName" Elevation="2" Class="rounded-lg" Style="height: 80px; width: 80px; object-fit: cover; cursor: pointer;" @onclick="@(() => OpenImagePreview(img.FileUrl))" />
+                                            <MudProgressCircular Color="Color.Info" Size="Size.Small" Indeterminate="true" />
                                         }
                                     </div>
+
+                                    @if (Ticket.Attachments != null && Ticket.Attachments.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-2 mt-2">
+                                            @foreach (var att in Ticket.Attachments)
+                                            {
+                                                <div class="position-relative" style="width: 80px; height: 80px; border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; overflow: visible; margin-right: 12px; margin-top: 6px;">
+                                                    <MudImage Src="@(string.IsNullOrEmpty(att.Base64Data) ? att.FileUrl : $"data:image/png;base64,{att.Base64Data}")"
+                                                              Alt="@att.FileName" Class="rounded-lg" Style="width: 100%; height: 100%; object-fit: cover; cursor: pointer;" @onclick="@(() => OpenImagePreview(string.IsNullOrEmpty(att.Base64Data) ? att.FileUrl : $"data:image/png;base64,{att.Base64Data}"))" />
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Cancel" Color="Color.Error" Size="Size.Small"
+                                                                   Style="position: absolute; top: -10px; right: -10px; z-index: 10; background: white; padding: 2px;"
+                                                                   OnClick="@(() => RemoveAttachment(att))" />
+                                                </div>
+                                            }
+                                        </div>
+                                    }
                                 }
                                 else
                                 {
-                                    <MudText Typo="Typo.caption" Color="Color.Secondary">Chưa có hình ảnh đính kèm.</MudText>
+                                    @if (Ticket.Attachments != null && Ticket.Attachments.Any())
+                                    {
+                                        <div class="d-flex flex-wrap gap-2">
+                                            @foreach (var img in Ticket.Attachments)
+                                            {
+                                                <MudImage Src="@img.FileUrl" Alt="@img.FileName" Elevation="2" Class="rounded-lg" Style="height: 80px; width: 80px; object-fit: cover; cursor: pointer;" @onclick="@(() => OpenImagePreview(img.FileUrl))" />
+                                            }
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <MudText Typo="Typo.caption" Color="Color.Secondary">Chưa có hình ảnh đính kèm.</MudText>
+                                    }
                                 }
                             </MudItem>
                         </MudGrid>
@@ -280,12 +420,6 @@
     <DialogActions>
         <MudButton StartIcon="@Icons.Material.Filled.Print" Color="Color.Default" Variant="Variant.Outlined" OnClick="PrintReceipt">In Biên Nhận PDF</MudButton>
         <MudButton StartIcon="@Icons.Material.Filled.Assignment" Color="Color.Primary" Variant="Variant.Outlined" Class="mr-auto ml-2" OnClick="OpenHandoverDialog">Xuất BBBG</MudButton>
-        @if (isEditing)
-        {
-            <MudButton StartIcon="@Icons.Material.Filled.Save" Color="Color.Success" Variant="Variant.Filled" Class="mr-2" OnClick="SaveChanges" Disabled="@isSaving">
-                @(isSaving ? "Đang lưu..." : "Lưu thay đổi")
-            </MudButton>
-        }
         <MudButton OnClick="Close" Variant="Variant.Text">Đóng</MudButton>
     </DialogActions>
 </MudDialog>
@@ -294,29 +428,333 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     
     [Parameter] public RmaTicketDto Ticket { get; set; } = new();
+    [Parameter] public EventCallback<RmaTicketDto> OnTicketUpdated { get; set; }
 
     private bool isEditing = false;
     private bool isSaving = false;
     private List<StatusMasterDto> _statuses = new();
     private CustomerDto? customer;
 
+    private List<DeviceDto> _filteredDevices = new();
+    private List<string> _accessories = new() { "Adapter/Sạc", "Dây nguồn", "Pin ngoài", "Chuột", "Bàn phím", "Bao da/Túi", "Bút cảm ứng" };
+    private List<string> _selectedAcc = new();
+    private string _customAcc = "";
+    private bool _uploading = false;
+    private string _location = "Tại Cty Song Linh";
+    private bool _warrantyActive = true;
+
+    private RmaTicketDto _ticketBackup = new();
+    private bool isApcDevice = false;
+    private DateTime? _apcExpiryDate;
+
     protected override async Task OnInitializedAsync()
     {
         _statuses = await TicketService.GetStatusesAsync();
-        if (!string.IsNullOrEmpty(Ticket.CustomerId))
+        
+        try
         {
-            try
+            var allDevices = await DeviceService.GetDevicesAsync();
+            if (!string.IsNullOrEmpty(Ticket.CustomerId))
             {
+                _filteredDevices = allDevices.Where(d => d.CustomerId == Ticket.CustomerId).ToList();
                 customer = await CustomerService.GetCustomerAsync(Ticket.CustomerId);
             }
-            catch (Exception ex)
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading initial data: {ex.Message}");
+        }
+
+        // Initialize accessories checklist from DTO
+        if (Ticket.Checklists != null)
+        {
+            _selectedAcc = Ticket.Checklists.Where(c => c.IsChecked).Select(c => c.ItemName).ToList();
+            foreach (var item in Ticket.Checklists.Where(c => c.IsChecked))
             {
-                Console.WriteLine($"Error loading customer details: {ex.Message}");
+                if (!_accessories.Contains(item.ItemName))
+                {
+                    _accessories.Add(item.ItemName);
+                }
+            }
+        }
+
+        // Parse metadata from StaffNote
+        if (!string.IsNullOrEmpty(Ticket.StaffNote))
+        {
+            // Parse Location
+            var locStart = Ticket.StaffNote.IndexOf("[Vị trí:", StringComparison.OrdinalIgnoreCase);
+            if (locStart != -1)
+            {
+                var locEnd = Ticket.StaffNote.IndexOf("]", locStart);
+                if (locEnd != -1)
+                {
+                    _location = Ticket.StaffNote.Substring(locStart + 8, locEnd - (locStart + 8)).Trim();
+                }
+            }
+
+            // Parse Warranty
+            var bhStart = Ticket.StaffNote.IndexOf("[BH:", StringComparison.OrdinalIgnoreCase);
+            if (bhStart != -1)
+            {
+                var bhEnd = Ticket.StaffNote.IndexOf("]", bhStart);
+                if (bhEnd != -1)
+                {
+                    var bhStr = Ticket.StaffNote.Substring(bhStart + 4, bhEnd - (bhStart + 4)).Trim();
+                    _warrantyActive = bhStr.Equals("Còn BH", StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+
+        CheckApcWarranty();
+    }
+
+    private void StartEditing()
+    {
+        _ticketBackup = new RmaTicketDto
+        {
+            DeviceId = Ticket.DeviceId,
+            DeviceSerialNumber = Ticket.DeviceSerialNumber,
+            DeviceModelName = Ticket.DeviceModelName,
+            CustomerId = Ticket.CustomerId,
+            CustomerName = Ticket.CustomerName,
+            CustomerPhone = Ticket.CustomerPhone,
+            CustomerContactPerson = Ticket.CustomerContactPerson,
+            StatusId = Ticket.StatusId,
+            StatusName = Ticket.StatusName,
+            StatusColorCode = Ticket.StatusColorCode,
+            WarningColor = Ticket.WarningColor,
+            VendorId = Ticket.VendorId,
+            VendorName = Ticket.VendorName,
+            ProblemDescription = Ticket.ProblemDescription,
+            ServiceMode = Ticket.ServiceMode,
+            ReceivedDate = Ticket.ReceivedDate,
+            SentDate = Ticket.SentDate,
+            IsUrgent = Ticket.IsUrgent,
+            StaffNote = Ticket.StaffNote,
+            EndUserName = Ticket.EndUserName,
+            Attachments = Ticket.Attachments.Select(a => new AttachmentDto
+            {
+                Id = a.Id,
+                FileUrl = a.FileUrl,
+                FileName = a.FileName,
+                UploadedAt = a.UploadedAt,
+                Base64Data = a.Base64Data,
+                FileType = a.FileType
+            }).ToList(),
+            Checklists = Ticket.Checklists.Select(c => new ChecklistDto
+            {
+                Id = c.Id,
+                ItemName = c.ItemName,
+                IsChecked = c.IsChecked
+            }).ToList()
+        };
+
+        isEditing = true;
+    }
+
+    private void CancelEditing()
+    {
+        Ticket.DeviceId = _ticketBackup.DeviceId;
+        Ticket.DeviceSerialNumber = _ticketBackup.DeviceSerialNumber;
+        Ticket.DeviceModelName = _ticketBackup.DeviceModelName;
+        Ticket.CustomerId = _ticketBackup.CustomerId;
+        Ticket.CustomerName = _ticketBackup.CustomerName;
+        Ticket.CustomerPhone = _ticketBackup.CustomerPhone;
+        Ticket.CustomerContactPerson = _ticketBackup.CustomerContactPerson;
+        Ticket.StatusId = _ticketBackup.StatusId;
+        Ticket.StatusName = _ticketBackup.StatusName;
+        Ticket.StatusColorCode = _ticketBackup.StatusColorCode;
+        Ticket.WarningColor = _ticketBackup.WarningColor;
+        Ticket.VendorId = _ticketBackup.VendorId;
+        Ticket.VendorName = _ticketBackup.VendorName;
+        Ticket.ProblemDescription = _ticketBackup.ProblemDescription;
+        Ticket.ServiceMode = _ticketBackup.ServiceMode;
+        Ticket.ReceivedDate = _ticketBackup.ReceivedDate;
+        Ticket.SentDate = _ticketBackup.SentDate;
+        Ticket.IsUrgent = _ticketBackup.IsUrgent;
+        Ticket.StaffNote = _ticketBackup.StaffNote;
+        Ticket.EndUserName = _ticketBackup.EndUserName;
+        Ticket.Attachments = _ticketBackup.Attachments;
+        Ticket.Checklists = _ticketBackup.Checklists;
+
+        _selectedAcc = Ticket.Checklists.Where(c => c.IsChecked).Select(c => c.ItemName).ToList();
+
+        CheckApcWarranty();
+        isEditing = false;
+    }
+
+    private void OnDeviceSelected(string deviceId)
+    {
+        Ticket.DeviceId = deviceId;
+        var dev = _filteredDevices.FirstOrDefault(d => d.Id == deviceId);
+        if (dev != null)
+        {
+            Ticket.DeviceSerialNumber = dev.SerialNumber;
+            Ticket.DeviceModelName = dev.ModelName;
+        }
+        CheckApcWarranty();
+    }
+
+    private void CheckApcWarranty()
+    {
+        isApcDevice = false;
+        _apcExpiryDate = null;
+        
+        var dev = _filteredDevices.FirstOrDefault(d => d.Id == Ticket.DeviceId);
+        if (dev == null) return;
+
+        bool isApc = (!string.IsNullOrEmpty(dev.ModelName) && dev.ModelName.Contains("APC", StringComparison.OrdinalIgnoreCase)) ||
+                     (!string.IsNullOrEmpty(dev.Brand) && dev.Brand.Contains("APC", StringComparison.OrdinalIgnoreCase));
+
+        if (!isApc) return;
+
+        string sn = dev.SerialNumber ?? "";
+        if (sn.Length >= 6 && 
+            char.IsDigit(sn[2]) && char.IsDigit(sn[3]) && 
+            char.IsDigit(sn[4]) && char.IsDigit(sn[5]))
+        {
+            if (int.TryParse(sn.Substring(2, 2), out int yearVal) &&
+                int.TryParse(sn.Substring(4, 2), out int weekVal))
+            {
+                if (weekVal >= 1 && weekVal <= 53)
+                {
+                    int fullYear = 2000 + yearVal;
+                    if (yearVal > 80)
+                    {
+                        fullYear = 1900 + yearVal;
+                    }
+
+                    try
+                    {
+                        DateTime jan1 = new DateTime(fullYear, 1, 1);
+                        DateTime mfgDate = jan1.AddDays((weekVal - 1) * 7);
+                        DateTime expiryDate = mfgDate.AddMonths(24);
+                        
+                        _apcExpiryDate = expiryDate;
+                        _warrantyActive = expiryDate >= DateTime.Today;
+                        isApcDevice = true;
+                    }
+                    catch
+                    {
+                        // Ignore date math errors
+                    }
+                }
             }
         }
     }
 
-    private async Task SaveChanges()
+    private async Task LookupWarranty()
+    {
+        var sn = Ticket.DeviceSerialNumber;
+        if (string.IsNullOrEmpty(sn)) return;
+
+        // Copy S/N vào clipboard
+        await JsRuntime.InvokeVoidAsync("navigator.clipboard.writeText", sn);
+
+        // Lấy URL tra cứu: ưu tiên VendorWarrantyLink trong DB, fallback về switch theo tên hãng
+        string url = !string.IsNullOrEmpty(Ticket.VendorWarrantyLink)
+            ? Ticket.VendorWarrantyLink
+            : GetFallbackWarrantyUrl();
+
+        // Mở tab mới
+        await JsRuntime.InvokeVoidAsync("open", url, "_blank");
+
+        Snackbar.Add($"✅ Đã copy S/N: <b>{sn}</b>. Đang chuyển hướng đến trang bảo hành hãng...", Severity.Info);
+    }
+
+    private string GetFallbackWarrantyUrl()
+    {
+        var vendorName = (Ticket.VendorName ?? string.Empty).ToLower();
+        return vendorName switch
+        {
+            var v when v.Contains("dell")  => $"https://www.dell.com/support/home/vi-vn?app=warranty&SerialNumber={Ticket.DeviceSerialNumber}",
+            var v when v.Contains("apple") => "https://checkcoverage.apple.com/vn/vi/",
+            var v when v.Contains("asus")  => "https://www.asus.com/vn/support/warranty-status-inquiry/",
+            var v when v.Contains("hp")    => "https://support.hp.com/vn-vi/check-warranty",
+            var v when v.Contains("apc")   => "https://www.apc.com/vi/vi/support/",
+            _ => $"https://www.google.com/search?q=tra+cuu+bao+hanh+{Uri.EscapeDataString(Ticket.VendorName ?? "")}"
+        };
+    }
+
+    void ToggleAcc(string acc)
+    {
+        if (_selectedAcc.Contains(acc)) _selectedAcc.Remove(acc);
+        else _selectedAcc.Add(acc);
+    }
+
+    void AddCustomAcc()
+    {
+        if (!string.IsNullOrWhiteSpace(_customAcc))
+        {
+            var t = _customAcc.Trim();
+            if (!_accessories.Contains(t)) _accessories.Add(t);
+            if (!_selectedAcc.Contains(t)) _selectedAcc.Add(t);
+            _customAcc = "";
+        }
+    }
+
+    private async Task OnFilesChanged(IReadOnlyList<IBrowserFile> files)
+    {
+        if (files == null || !files.Any()) return;
+        _uploading = true;
+        StateHasChanged();
+
+        foreach (var file in files)
+        {
+            if (file.Size > 5 * 1024 * 1024)
+            {
+                Snackbar.Add($"File {file.Name} vượt quá giới hạn 5MB!", Severity.Warning);
+                continue;
+            }
+
+            try
+            {
+                using var stream = file.OpenReadStream(5 * 1024 * 1024);
+                using var ms = new MemoryStream();
+                await stream.CopyToAsync(ms);
+                var base64 = Convert.ToBase64String(ms.ToArray());
+
+                Ticket.Attachments.Add(new AttachmentDto
+                {
+                    FileName = file.Name,
+                    Base64Data = base64,
+                    FileType = file.Name.Contains("serial", StringComparison.OrdinalIgnoreCase) || file.Name.Contains("sn", StringComparison.OrdinalIgnoreCase)
+                        ? "SN_PHOTO"
+                        : "CONDITION_PHOTO",
+                    UploadedAt = DateTime.UtcNow
+                });
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi khi tải ảnh {file.Name}: {ex.Message}", Severity.Error);
+            }
+        }
+
+        _uploading = false;
+        StateHasChanged();
+    }
+
+    private void RemoveAttachment(AttachmentDto att)
+    {
+        Ticket.Attachments.Remove(att);
+    }
+
+    private string GetCleanStaffNote(string? staffNote)
+    {
+        if (string.IsNullOrEmpty(staffNote)) return "";
+        if (staffNote.StartsWith("[Vị trí:", StringComparison.OrdinalIgnoreCase))
+        {
+            var newlineIndex = staffNote.IndexOf('\n');
+            if (newlineIndex != -1)
+            {
+                return staffNote.Substring(newlineIndex + 1);
+            }
+            return "";
+        }
+        return staffNote;
+    }
+
+    private async Task UpdateDevice()
     {
         isSaving = true;
         
@@ -334,18 +772,43 @@
             }
         }
 
+        // Cập nhật lại thông tin Thiết bị dựa trên Id mới (nếu được thay đổi)
+        var selectedDev = _filteredDevices.FirstOrDefault(d => d.Id == Ticket.DeviceId);
+        if (selectedDev != null)
+        {
+            Ticket.DeviceSerialNumber = selectedDev.SerialNumber;
+            Ticket.DeviceModelName = selectedDev.ModelName;
+        }
+
+        // Cập nhật lại StaffNote kèm metadata vị trí, bảo hành, phụ kiện
+        var cleanNote = GetCleanStaffNote(Ticket.StaffNote);
+        var accStr = _selectedAcc.Any() ? string.Join(", ", _selectedAcc) : "Không có";
+        var bh     = _warrantyActive ? "Còn BH" : "Hết BH";
+        var meta   = $"[Vị trí: {_location}] [BH: {bh}] [Phụ kiện: {accStr}]";
+        Ticket.StaffNote = string.IsNullOrWhiteSpace(cleanNote)
+            ? meta
+            : $"{meta}\n{cleanNote}";
+
+        // Đồng bộ local checklists cho giao diện cập nhật ngay lập tức
+        Ticket.Checklists = _selectedAcc.Select(a => new ChecklistDto { ItemName = a, IsChecked = true }).ToList();
+
         var success = await TicketService.UpdateRmaTicketAsync(Ticket.Id, Ticket);
         
         isSaving = false;
 
         if (success)
         {
-            Snackbar.Add("Đã lưu thay đổi thành công!", Severity.Success);
-            MudDialog.Close(DialogResult.Ok(Ticket)); // Trả về DTO mới cập nhật
+            Snackbar.Add("Đã cập nhật thay đổi thành công!", Severity.Success);
+            isEditing = false;
+            StateHasChanged();
+            if (OnTicketUpdated.HasDelegate)
+            {
+                await OnTicketUpdated.InvokeAsync(Ticket);
+            }
         }
         else
         {
-            Snackbar.Add("Có lỗi xảy ra khi lưu.", Severity.Error);
+            Snackbar.Add("Có lỗi xảy ra khi cập nhật.", Severity.Error);
         }
     }
 

@@ -167,3 +167,208 @@ dotnet watch --project RMA.Client
 
 - Địa chỉ mặc định của API Swagger: `https://localhost:7136/swagger/index.html` hoặc cổng HTTP tương ứng.
 - Địa chỉ mặc định của Client: `http://localhost:5286` hoặc `https://localhost:7237`.
+
+---
+
+## 5. Thiết kế Phân hệ Bán Hàng & Giao Hàng (Sales & Delivery)
+
+### 5.1. Cấu trúc Table (Schema / NoSQL Document)
+
+```csharp
+// SalesOrder Document (Đơn Hàng)
+public class SalesOrder
+{
+    public string Id { get; set; } // PK, Document ID
+    public string OrderCode { get; set; }
+    public string CustomerId { get; set; } // FK to Customers
+    public DateTime OrderDate { get; set; }
+    public DateTime? DeliveryDate { get; set; }
+    public string Status { get; set; } // Pending, Delivered
+    public List<OrderDetail> Details { get; set; } // Embedded Array
+}
+
+// Embedded trong SalesOrder
+public class OrderDetail
+{
+    public string ModelId { get; set; }
+    public int Quantity { get; set; }
+    public int WarrantyMonths { get; set; }
+    public string Note { get; set; }
+}
+
+// Model Document (Sản Phẩm/Mẫu) - Đã cập nhật
+public class Model
+{
+    public string Id { get; set; }
+    public string CategoryId { get; set; }
+    public string Brand { get; set; }
+    public string ModelName { get; set; }
+    // Trường bổ sung
+    public int StockQuantity { get; set; }
+    public int WarrantyMonths { get; set; }
+    public bool IsSerialRequired { get; set; }
+}
+
+// Device Document (Thiết bị) - Đã cập nhật
+public class Device
+{
+    public string Id { get; set; }
+    public string SerialNumber { get; set; }
+    public string CustomerId { get; set; }
+    public string ModelId { get; set; }
+    public DateTime? PurchaseDate { get; set; }
+    public DateTime? WarrantyExpiry { get; set; }
+    // Trường bổ sung
+    public string OrderId { get; set; } // FK to SalesOrder
+}
+```
+
+### 5.2. ERD Diagram (Cập nhật)
+
+```mermaid
+erDiagram
+    customers ||--o{ sales_orders : "đặt hàng"
+    customers ||--o{ devices : "sở hữu"
+    customers ||--o{ rma_tickets : "yêu cầu"
+    categories ||--o{ models : "phân nhóm"
+    sales_orders ||--o{ devices : "sinh ra"
+    models ||--o{ devices : "định danh mẫu"
+    devices ||--o{ rma_tickets : "lịch sử bảo hành"
+    
+    customers {
+        string Id PK
+        string Name
+    }
+    
+    sales_orders {
+        string Id PK
+        string OrderCode
+        string CustomerId FK
+        string Status
+        list Details "Embedded Array"
+    }
+    
+    devices {
+        string Id PK
+        string SerialNumber
+        string OrderId FK
+        string ModelId FK
+        datetime WarrantyExpiry
+    }
+    
+    models {
+        string Id PK
+        string ModelName
+        int StockQuantity
+        int WarrantyMonths
+        bool IsSerialRequired
+    }
+```
+
+### 5.3. Sequence Diagram (Luồng Giao Hàng & Bảo Hành)
+
+```mermaid
+sequenceDiagram
+    actor Sales as Kinh Doanh
+    actor Tech as Kỹ Thuật
+    participant UI as Blazor Client
+    participant API as Server API
+    participant DB as Firestore DB
+
+    Sales->>UI: Tạo đơn hàng (Chọn KH, Model, SL)
+    UI->>API: POST /api/salesorders
+    API->>DB: Lưu SalesOrder (Status: Pending)
+    UI-->>Sales: Thông báo tạo thành công
+
+    Tech->>UI: Mở đơn Pending & Quét mã S/N
+    UI->>API: POST /api/salesorders/confirm-delivery
+    API->>DB: Kiểm tra số lượng S/N vs Quantity
+    alt IsSerialRequired == false
+        API->>API: Tự động sinh S/N (SYS-CABLE-...)
+    end
+    API->>DB: Tạo hàng loạt Devices mới (Cộng hạn BH)
+    API->>DB: Trừ StockQuantity trong Models
+    API->>DB: Cập nhật SalesOrder (Status: Delivered)
+    API-->>UI: Trả kết quả thành công
+    UI-->>Tech: Thông báo hoàn tất giao hàng
+```
+
+### 5.4. Use Case Diagram (Phân Quyền)
+
+```mermaid
+flowchart LR
+    Sales([Nhân viên Kinh doanh])
+    Tech([Nhân viên Kỹ thuật])
+    
+    subgraph Hệ_thống_Bán_Hàng_và_Giao_Hàng
+        UC1(Tạo đơn hàng bán)
+        UC2(Chọn khách hàng và sản phẩm)
+        UC3(Quét mã vạch S/N)
+        UC4(Xác nhận giao hàng)
+        UC5(Tự động tính hạn bảo hành)
+    end
+    
+    Sales --> UC1
+    Sales --> UC2
+    Tech --> UC3
+    Tech --> UC4
+    UC4 -.->|Kích hoạt| UC5
+```
+
+### 5.5. Class Diagram (Backend C#)
+
+```mermaid
+classDiagram
+    class SalesOrdersController {
+        +Get()
+        +Post(SalesOrderCreateDto)
+        +ConfirmDelivery(ConfirmDeliveryDto)
+    }
+    
+    class SalesOrder {
+        +Id : string
+        +OrderCode : string
+        +CustomerId : string
+        +Status : string
+        +List~OrderDetail~ Details
+    }
+    
+    class OrderDetail {
+        +ModelId : string
+        +Quantity : int
+        +WarrantyMonths : int
+        +Note : string
+    }
+    
+    class Device {
+        +Id : string
+        +SerialNumber : string
+        +OrderId : string
+        +WarrantyExpiry : DateTime
+    }
+    
+    class Model {
+        +Id : string
+        +StockQuantity : int
+        +IsSerialRequired : bool
+    }
+    
+    SalesOrdersController --> SalesOrder : "CRUD"
+    SalesOrdersController --> Device : "Tạo thiết bị"
+    SalesOrdersController --> Model : "Trừ tồn kho"
+    SalesOrder *-- OrderDetail : "Chứa (Embedded)"
+```
+
+### 5.6. Sitemap (UI Flow)
+
+```mermaid
+flowchart TD
+    Dashboard[Dashboard] --> SalesList[Danh sách Đơn hàng]
+    SalesList --> CreateOrder[Tạo Đơn Hàng Mới]
+    SalesList --> DeliveryDialog[Hộp thoại Giao Hàng]
+    
+    CreateOrder -->|Chọn KH & Model| SaveOrder(Lưu trạng thái Pending)
+    DeliveryDialog -->|Quét S/N| ScanValidation{Kiểm tra S/N hợp lệ?}
+    ScanValidation -->|Đúng| ConfirmDelivery(Xác nhận Giao & Kích hoạt BH)
+    ScanValidation -->|Sai| ShowError(Cảnh báo lỗi)
+```

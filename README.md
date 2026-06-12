@@ -315,6 +315,22 @@ flowchart LR
     UC4 -.->|Kích hoạt| UC5
 ```
 
+#### Đặc tả Use Case: Tạo đơn hàng & Giao hàng
+* **Tên Use Case:** Bán hàng & Giao hàng (Sales & Delivery).
+* **Tác nhân (Actor):** Nhân viên Kinh doanh (Sales), Nhân viên Kỹ thuật (Tech).
+* **Tiền điều kiện (Pre-conditions):** Nhân viên đã đăng nhập và được cấp quyền tương ứng (Sales/Tech).
+* **Luồng cơ bản (Main Flow):**
+  1. Kinh doanh truy cập trang Tạo Đơn Hàng (`SalesOrderCreate.razor`).
+  2. Kinh doanh chọn Khách hàng, chọn Model sản phẩm và nhập Số lượng.
+  3. Kinh doanh lưu đơn ở trạng thái "Pending".
+  4. Kỹ thuật mở đơn "Pending" trong hộp thoại Giao Hàng (`DeliveryConfirmDialog.razor`).
+  5. Kỹ thuật quét mã vạch Serial Number (S/N) cho các thiết bị yêu cầu (IsSerialRequired = true).
+  6. Kỹ thuật nhấn "Xác nhận Giao Hàng".
+  7. Hệ thống lưu trạng thái đơn thành "Delivered", tự sinh S/N cho các thiết bị không yêu cầu quét mã, tự động tính ngày hết hạn bảo hành dựa vào WarrantyMonths, trừ tồn kho và ghi nhận thiết bị vào DB.
+* **Luồng rẽ nhánh (Alternate Flow):**
+  * *5a. Mã S/N bị trùng:* Hệ thống cảnh báo và yêu cầu quét lại.
+  * *5b. Số lượng S/N quét không khớp số lượng đơn:* Nút Xác nhận bị vô hiệu hóa.
+
 ### 5.5. Class Diagram (Backend C#)
 
 ```mermaid

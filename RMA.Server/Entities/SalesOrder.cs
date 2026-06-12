@@ -26,6 +26,9 @@ namespace RMA.Server.Entities
         public string Status { get; set; } = "Pending";
 
         [FirestoreProperty]
+        public string SalesNote { get; set; } = string.Empty;
+
+        [FirestoreProperty]
         public List<OrderDetail> Details { get; set; } = new List<OrderDetail>();
     }
 

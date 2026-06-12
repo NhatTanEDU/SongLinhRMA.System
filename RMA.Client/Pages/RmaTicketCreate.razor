@@ -1,0 +1,108 @@
+@page "/tickets/create"
+@using RMA.Shared.DTOs
+@using System.Net.Http.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject NavigationManager Navigation
+
+<MudText Typo="Typo.h4" Class="mb-4">Tạo Phiếu RMA Mới</MudText>
+
+<MudPaper Class="pa-4" Elevation="3">
+    <EditForm Model="@dto" OnValidSubmit="SaveTicket">
+        <DataAnnotationsValidator />
+
+        <MudGrid>
+            <MudItem xs="12" md="6">
+                <MudTextField @bind-Value="dto.SerialNumber" 
+                              For="@(() => dto.SerialNumber)" 
+                              Label="Serial Number (S/N)" 
+                              Required="true"
+                              Adornment="Adornment.End" 
+                              AdornmentIcon="@Icons.Material.Filled.CameraAlt" 
+                              OnAdornmentClick="TriggerOcrScan" 
+                              AdornmentAriaLabel="Quét OCR" />
+            </MudItem>
+
+            <MudItem xs="12" md="6" Class="d-flex align-center">
+                <MudSelect T="string" Label="Khách Hàng" @bind-Value="dto.CustomerId" Required="true" For="@(() => dto.CustomerId)" Class="flex-grow-1">
+                    @foreach (var c in customers)
+                    {
+                        <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Class="ml-2 mt-4" OnClick="OpenCustomerDialog" Title="Thêm Khách Hàng Nhanh" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudTextField @bind-Value="dto.ProblemDescription" 
+                              For="@(() => dto.ProblemDescription)" 
+                              Label="Mô tả lỗi" 
+                              Lines="3" 
+                              Required="true" />
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Class="mb-2">Phụ kiện đi kèm</MudText>
+                @* Assuming Checklist contains these boolean properties based on spec *@
+                <div class="d-flex gap-4">
+                    <MudCheckBox @bind-Value="dto.Checklist.HasAdapter" Label="Sạc / Adapter" />
+                    <MudCheckBox @bind-Value="dto.Checklist.HasCable" Label="Cáp kết nối" />
+                    <MudCheckBox @bind-Value="dto.Checklist.HasBox" Label="Hộp" />
+                </div>
+            </MudItem>
+        </MudGrid>
+
+        <div class="mt-6 d-flex justify-end gap-2">
+            <MudButton Variant="Variant.Outlined" OnClick="@(() => Navigation.NavigateTo("/tickets"))">Hủy</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" ButtonType="ButtonType.Submit">Lưu Phiếu</MudButton>
+        </div>
+    </EditForm>
+</MudPaper>
+
+@code {
+    private RmaTicketCreateDto dto = new() { Checklist = new ComponentChecklistDto() };
+    private List<CustomerDto> customers = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCustomers();
+    }
+
+    private async Task LoadCustomers()
+    {
+        var response = await Http.GetFromJsonAsync<List<CustomerDto>>("api/customers");
+        if (response != null)
+        {
+            customers = response;
+        }
+    }
+
+    private async Task TriggerOcrScan()
+    {
+        Snackbar.Add("Đang kích hoạt Camera quét OCR...", Severity.Info);
+        // Simulate OCR API Call
+        await Task.Delay(1000); 
+        dto.SerialNumber = "SN-" + Guid.NewGuid().ToString().Substring(0, 8).ToUpper();
+        StateHasChanged();
+    }
+
+    private async Task OpenCustomerDialog()
+    {
+        // TBD: Open CustomerDialog.razor and await result
+        Snackbar.Add("Chức năng thêm khách hàng nhanh (TBD)", Severity.Normal);
+    }
+
+    private async Task SaveTicket()
+    {
+        var response = await Http.PostAsJsonAsync("api/rmatickets", dto);
+        if (response.IsSuccessStatusCode)
+        {
+            Snackbar.Add("Tiếp nhận thiết bị & tạo phiếu RMA thành công!", Severity.Success);
+            Navigation.NavigateTo("/tickets");
+        }
+        else
+        {
+            Snackbar.Add("Lỗi khi tạo phiếu RMA", Severity.Error);
+        }
+    }
+}

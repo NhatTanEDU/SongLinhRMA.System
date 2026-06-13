@@ -1,0 +1,176 @@
+@using RMA.Shared.DTOs
+@inject RMA.Client.Services.CustomerService CustomerService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudTable Items="@customers" Dense="false" Hover="true" Striped="false" Filter="new Func<CustomerDto,bool>(FilterFunc)" @bind-SelectedItem="selectedItem" Elevation="2" Outlined="true" Class="rounded-lg">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6" Class="fw-bold">Danh sách Khách hàng</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddCustomerDialog" Class="mr-3 rounded-lg">Thêm Mới</MudButton>
+        <MudTextField @bind-Value="searchString" Placeholder="Tìm kiếm..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">STT</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Avatar</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Tên</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Người đại diện</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Email</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Số điện thoại</MudText></MudTh>
+        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Địa chỉ</MudText></MudTh>
+        <MudTh Style="text-align:center;"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="STT">@(customers.IndexOf(context) + 1)</MudTd>
+        <MudTd DataLabel="Avatar">
+            @if (!string.IsNullOrEmpty(context.AvatarUrl))
+            {
+                <MudAvatar Size="Size.Medium" Class="elevation-1">
+                    <img src="@context.AvatarUrl" style="width:100%; height:100%; object-fit:cover;" />
+                </MudAvatar>
+            }
+            else
+            {
+                <MudAvatar Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Class="elevation-1">
+                    @(!string.IsNullOrEmpty(context.Name) ? context.Name.Substring(0, 1).ToUpper() : "?")
+                </MudAvatar>
+            }
+        </MudTd>
+        <MudTd DataLabel="Tên"><b>@context.Name</b></MudTd>
+        <MudTd DataLabel="Người đại diện">
+            @if (!string.IsNullOrEmpty(context.ContactPerson))
+            {
+                <div class="d-flex align-center gap-1">
+                    <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Color="Color.Primary" />
+                    <MudText Typo="Typo.body2">@context.ContactPerson</MudText>
+                </div>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Color="Color.Secondary">—</MudText>
+            }
+        </MudTd>
+        <MudTd DataLabel="Email">@context.Email</MudTd>
+        <MudTd DataLabel="Số điện thoại">@context.Phone</MudTd>
+        <MudTd DataLabel="Địa chỉ">@context.Address</MudTd>
+        <MudTd DataLabel="Thao tác" Style="text-align:center;">
+            <MudTooltip Text="Chỉnh sửa">
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" OnClick="@(() => OpenEditCustomerDialog(context))" />
+            </MudTooltip>
+            <MudTooltip Text="Xóa">
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteCustomer(context))" />
+            </MudTooltip>
+        </MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager InfoFormat="{first_item}-{last_item} trong {all_items}" RowsPerPageString="Số dòng mỗi trang:" />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private List<CustomerDto> customers = new List<CustomerDto>();
+    private string searchString = "";
+    private CustomerDto? selectedItem = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        customers = await CustomerService.GetCustomersAsync();
+    }
+
+    private async Task OpenAddCustomerDialog()
+    {
+        var parameters = new DialogParameters { ["IsEdit"] = false };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Thêm Khách Hàng", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var newCustomer = (CustomerCreateDto)result.Data!;
+            var added = await CustomerService.CreateCustomerAsync(newCustomer);
+            if (added != null)
+            {
+                Snackbar.Add("Thêm khách hàng thành công!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Thêm khách hàng thất bại!", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenEditCustomerDialog(CustomerDto customer)
+    {
+        var editModel = new CustomerCreateDto
+        {
+            Name = customer.Name,
+            ContactPerson = customer.ContactPerson,
+            Phone = customer.Phone,
+            Email = customer.Email,
+            Address = customer.Address,
+            AvatarUrl = customer.AvatarUrl
+        };
+        var parameters = new DialogParameters { ["Customer"] = editModel, ["IsEdit"] = true };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Chỉnh Sửa Khách Hàng", parameters, options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var updatedCustomer = (CustomerCreateDto)result.Data!;
+            var success = await CustomerService.UpdateCustomerAsync(customer.Id, updatedCustomer);
+            if (success)
+            {
+                Snackbar.Add("Cập nhật khách hàng thành công!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Cập nhật khách hàng thất bại!", Severity.Error);
+            }
+        }
+    }
+
+    private async Task DeleteCustomer(CustomerDto customer)
+    {
+        bool? result = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận xóa",
+            $"Bạn có chắc chắn muốn xóa khách hàng '{customer.Name}' không?",
+            yesText: "Xóa", cancelText: "Hủy");
+
+        if (result == true)
+        {
+            var success = await CustomerService.DeleteCustomerAsync(customer.Id);
+            if (success)
+            {
+                Snackbar.Add("Xóa khách hàng thành công!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Xóa khách hàng thất bại!", Severity.Error);
+            }
+        }
+    }
+
+    private bool FilterFunc(CustomerDto element)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (element.Name != null && element.Name.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.Email != null && element.Email.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.Phone != null && element.Phone.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.ContactPerson != null && element.ContactPerson.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+}

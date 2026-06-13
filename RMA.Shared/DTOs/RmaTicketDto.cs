@@ -88,6 +88,7 @@ namespace RMA.Shared.DTOs
 
     public class RmaTicketCreateDto
     {
+        public string SerialNumber { get; set; } = string.Empty;
         public string DeviceId { get; set; } = string.Empty;
         public string CustomerId { get; set; } = string.Empty;
         public string StatusId { get; set; } = string.Empty;
@@ -98,6 +99,14 @@ namespace RMA.Shared.DTOs
         public string? StaffNote { get; set; }
         public string? EndUserName { get; set; }
         public List<AttachmentDto> Attachments { get; set; } = new();
+        public ComponentChecklistDto Checklist { get; set; } = new();
+    }
+
+    public class ComponentChecklistDto
+    {
+        public bool HasAdapter { get; set; }
+        public bool HasCable { get; set; }
+        public bool HasBox { get; set; }
     }
 
     public class RmaTicketUpdateStatusDto

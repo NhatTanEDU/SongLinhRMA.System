@@ -13,6 +13,7 @@ namespace RMA.Shared.DTOs
         public string? Brand { get; set; }
         public DateTime? PurchaseDate { get; set; }
         public DateTime? WarrantyExpiry { get; set; }
+        public string? OrderId { get; set; }
     }
 
     public class DeviceCreateDto

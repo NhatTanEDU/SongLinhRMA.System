@@ -1,0 +1,82 @@
+@using RMA.Shared.DTOs
+@inject RMA.Client.Services.DeviceService DeviceService
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudTable Items="@devices" Dense="true" Hover="true" Striped="true" Filter="new Func<DeviceDto,bool>(FilterFunc)" @bind-SelectedItem="selectedItem">
+    <ToolBarContent>
+        <MudText Typo="Typo.h6">Device List</MudText>
+        <MudSpacer />
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddDeviceDialog">Thêm Thiết Bị</MudButton>
+        <MudSpacer />
+        <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
+    </ToolBarContent>
+    <HeaderContent>
+        <MudTh>STT</MudTh>
+        <MudTh>Serial Number</MudTh>
+        <MudTh>Model</MudTh>
+        <MudTh>Brand</MudTh>
+        <MudTh>Customer</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="STT">@(devices.IndexOf(context) + 1)</MudTd>
+        <MudTd DataLabel="Serial Number">@context.SerialNumber</MudTd>
+        <MudTd DataLabel="Model">@context.ModelName</MudTd>
+        <MudTd DataLabel="Brand">@context.Brand</MudTd>
+        <MudTd DataLabel="Customer">@context.CustomerName</MudTd>
+    </RowTemplate>
+    <PagerContent>
+        <MudTablePager />
+    </PagerContent>
+</MudTable>
+
+@code {
+    private List<DeviceDto> devices = new List<DeviceDto>();
+    private string searchString = "";
+    private DeviceDto? selectedItem = null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        devices = await DeviceService.GetDevicesAsync();
+    }
+
+    private async Task OpenAddDeviceDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<DeviceDialog>("Thêm Thiết Bị", options);
+        var result = await dialog.Result;
+
+        if (result is not null && !result.Canceled)
+        {
+            var newDevice = (DeviceCreateDto)result.Data!;
+            var added = await DeviceService.CreateDeviceAsync(newDevice);
+            if (added != null)
+            {
+                Snackbar.Add("Thêm thiết bị thành công!", Severity.Success);
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Thêm thiết bị thất bại!", Severity.Error);
+            }
+        }
+    }
+
+    private bool FilterFunc(DeviceDto element)
+    {
+        if (string.IsNullOrWhiteSpace(searchString))
+            return true;
+        if (element.SerialNumber != null && element.SerialNumber.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.ModelName != null && element.ModelName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (element.CustomerName != null && element.CustomerName.Contains(searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    }
+}

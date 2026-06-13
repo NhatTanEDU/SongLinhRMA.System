@@ -1,0 +1,176 @@
+@page "/tech/deliveries"
+@layout TechLayout
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<PageTitle>Danh Sách Chờ Giao Hàng - Kỹ Thuật</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
+    <MudText Typo="Typo.h4" Class="fw-bold mb-6" Style="color: #E51D24;">DANH SÁCH ĐƠN HÀNG CHỜ GIAO</MudText>
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Error" Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else if (!_orders.Any())
+    {
+        <MudAlert Severity="Severity.Info" Class="rounded-lg">Hiện tại không có đơn hàng nào chờ giao.</MudAlert>
+    }
+    else
+    {
+        <MudGrid>
+            @foreach (var order in _orders)
+            {
+                <MudItem xs="12" md="6" lg="4">
+                    <MudPaper Elevation="3" Class="pa-6 rounded-xl position-relative h-100 d-flex flex-column justify-space-between" Style="@($"border-left: 6px solid {(order.Status == "Delivering" ? "#0072BC" : "#FFF200")};")">
+                        <div>
+                            <div class="d-flex justify-space-between align-center mb-3">
+                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">@order.OrderCode</MudText>
+                                @if (order.Status == "Pending")
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">Chờ giao</MudChip>
+                                }
+                                else if (order.Status == "Delivering")
+                                {
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">Đang giao</MudChip>
+                                }
+                            </div>
+                            
+                            <MudText Typo="Typo.body2" Class="fw-bold mb-2">Khách hàng: @order.CustomerName</MudText>
+                            <MudText Typo="Typo.caption" Class="text-secondary d-block">Ngày tạo: @order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+                            @if (!string.IsNullOrEmpty(order.SalesNote))
+                            {
+                                <MudText Typo="Typo.caption" Class="text-secondary d-block mt-1">Ghi chú: <i>@order.SalesNote</i></MudText>
+                            }
+
+                            <MudDivider Class="my-3" />
+
+                            <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">Chi tiết sản phẩm:</MudText>
+                            @foreach (var d in order.Details)
+                            {
+                                <div class="d-flex justify-space-between align-center py-1">
+                                    <MudText Typo="Typo.caption" Style="max-width: 70%;" Class="text-truncate">@d.ModelName (@d.DeviceSpecs)</MudText>
+                                    <MudText Typo="Typo.caption" Class="fw-bold">SL: @d.Quantity</MudText>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="mt-4">
+                            <div class="d-flex gap-2 w-100">
+                                @if (order.Status == "Pending")
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Delivering"))" Class="flex-grow-1 rounded-lg">
+                                        Bắt đầu giao
+                                    </MudButton>
+                                }
+                                else if (order.Status == "Delivering")
+                                {
+                                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Pending"))" Class="flex-grow-1 rounded-lg">
+                                        Hoàn về kho
+                                    </MudButton>
+                                }
+                                
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Small" OnClick="@(() => OpenConfirmDeliveryDialog(order))" Class="flex-grow-1 rounded-lg" Style="background-color: #E51D24;">
+                                    Quét S/N & Giao
+                                </MudButton>
+                            </div>
+                        </div>
+                    </MudPaper>
+                </MudItem>
+            }
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private List<SalesOrderDto> _orders = new();
+    private bool _loading = true;
+    private HubConnection? _hubConnection;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On("OrderStateChanged", async () =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadOrders();
+            });
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    private async Task LoadOrders()
+    {
+        try
+        {
+            var all = await Http.GetFromJsonAsync<List<SalesOrderDto>>("api/salesorders") ?? new List<SalesOrderDto>();
+            _orders = all.Where(o => o.Status == "Pending" || o.Status == "Delivering").OrderBy(o => o.OrderDate).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải đơn hàng: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+
+
+    private async Task UpdateStatus(SalesOrderDto order, string newStatus)
+    {
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/salesorders/{order.Id}/status", newStatus);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Đã cập nhật trạng thái đơn sang: {(newStatus == "Delivering" ? "Đang giao hàng" : "Chờ giao")}", Severity.Success);
+                await LoadOrders();
+            }
+            else
+            {
+                Snackbar.Add("Cập nhật trạng thái thất bại", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenConfirmDeliveryDialog(SalesOrderDto order)
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var parameters = new DialogParameters { ["Order"] = order };
+        var dialog = await DialogService.ShowAsync<DeliveryConfirmDialog>("Xác Nhận Giao Hàng & Kích Hoạt Bảo Hành", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            await LoadOrders();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}

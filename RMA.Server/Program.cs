@@ -10,6 +10,7 @@ var builder = WebApplication.CreateBuilder(args);
 // Add services to the container.
 builder.Services.AddControllers();
 builder.Services.AddMemoryCache();
+builder.Services.AddSignalR();
 
 // Configure Firebase JWT Authentication
 var projectId = builder.Configuration["Firebase:ProjectId"];
@@ -56,7 +57,8 @@ builder.Services.AddCors(options =>
         {
             policy.WithOrigins("http://localhost:5286", "https://localhost:7237")
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials();
         });
 });
 
@@ -124,5 +126,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<RMA.Server.Hubs.SalesHub>("/salesHub");
 
 app.Run();

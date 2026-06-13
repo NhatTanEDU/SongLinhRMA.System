@@ -1,0 +1,413 @@
+@page "/sales-dashboard"
+@layout SalesLayout
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+@implements IAsyncDisposable
+
+<PageTitle>Quản lý Đơn Hàng Giao Nhận - Phòng Kinh Doanh</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
+    <!-- Header Toolbar -->
+    <div class="d-flex align-center justify-space-between mb-6">
+        <div class="d-flex align-center gap-3">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick='() => NavigationManager.NavigateTo("/portal")' title="Quay lại Portal" />
+            <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #0072BC;">CỔNG KINH DOANH & GIAO NHẬN</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateOrderDialog" Class="rounded-lg py-2.5 px-5 fw-bold" Style="background-color: #0072BC;">
+            Lên Đơn Hàng Mới
+        </MudButton>
+    </div>
+
+    <!-- Stats Dashboard Cards -->
+    <MudGrid Class="mb-8">
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #0072BC; background-color: #ffffff;">
+                <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
+                    <MudIcon Icon="@Icons.Material.Filled.Today" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Đơn Hàng Hôm Nay</MudText>
+                    <MudText Typo="Typo.h4" Class="fw-bold">@_stats.TodayOrders</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #E51D24; background-color: #ffffff;">
+                <MudAvatar Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Large">
+                    <MudIcon Icon="@Icons.Material.Filled.DateRange" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Đơn Hàng Tuần Này</MudText>
+                    <MudText Typo="Typo.h4" Class="fw-bold">@_stats.WeeklyOrders</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #FFF200; background-color: #ffffff;">
+                <MudAvatar Color="Color.Warning" Variant="Variant.Filled" Size="Size.Large" Style="color: black;">
+                    <MudIcon Icon="@Icons.Material.Filled.Inventory" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Tồn Kho Thiết Bị</MudText>
+                    <MudText Typo="Typo.h4" Class="fw-bold">@_stats.TotalStock</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" sm="6" md="3">
+            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #2e7d32; background-color: #ffffff;">
+                <MudAvatar Color="Color.Success" Variant="Variant.Filled" Size="Size.Large">
+                    <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
+                </MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Đã Giao / Tổng Số</MudText>
+                    <MudText Typo="Typo.h4" Class="fw-bold">@_stats.DeliveredOrders / @_orders.Count</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Tabs Content -->
+    <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="rounded-xl">
+        <!-- Tab 1: Un-delivered Orders -->
+        <MudTabPanel Text="ĐƠN HÀNG CHƯA GIAO" Icon="@Icons.Material.Filled.PendingActions">
+            <div class="pa-6 bg-white rounded-b-xl">
+                @if (_loading)
+                {
+                    <div class="d-flex justify-center my-8">
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                    </div>
+                }
+                else
+                {
+                <MudDataGrid Items="@_orders.Where(o => o.Status != "Delivered")" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                    <ToolBarContent>
+                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Chưa Giao</MudText>
+                        <MudSpacer />
+                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                    </ToolBarContent>
+                    <Columns>
+                        <PropertyColumn Property="x => x.OrderCode" Title="Mã Đơn" CellStyle="font-weight: bold; color: #0072BC;" />
+                        <TemplateColumn Title="Khách Hàng">
+                            <CellTemplate>
+                                <div class="d-flex align-center gap-3">
+                                    @if (!string.IsNullOrEmpty(context.Item.CustomerAvatarUrl))
+                                    {
+                                        <MudAvatar Size="Size.Medium" Class="elevation-1">
+                                            <img src="@context.Item.CustomerAvatarUrl" style="width:100%; height:100%; object-fit:cover;" />
+                                        </MudAvatar>
+                                    }
+                                    else
+                                    {
+                                        <MudAvatar Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Class="elevation-1">
+                                            @(!string.IsNullOrEmpty(context.Item.CustomerName) ? context.Item.CustomerName.Substring(0, 1).ToUpper() : "?")
+                                        </MudAvatar>
+                                    }
+                                    <MudText Typo="Typo.body2" Class="fw-bold">@context.Item.CustomerName</MudText>
+                                </div>
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn Title="Ngày Tạo">
+                            <CellTemplate>
+                                @context.Item.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <PropertyColumn Property="x => x.SalesNote" Title="Ghi chú Sale" />
+                        <TemplateColumn Title="Trạng Thái">
+                            <CellTemplate>
+                                @if (context.Item.Status == "Pending")
+                                {
+                                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Pending">Chờ Giao</MudChip>
+                                }
+                                else if (context.Item.Status == "Delivering")
+                                {
+                                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.DirectionsCar">Đang Giao</MudChip>
+                                }
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn Title="S/N Status">
+                            <CellTemplate>
+                                @if (context.Item.Details.Any(d => d.IsSerialRequired))
+                                {
+                                    <MudText Typo="Typo.caption" Class="fw-bold text-danger">⚠️ CHƯA CÓ S/N</MudText>
+                                }
+                                else
+                                {
+                                    <MudText Typo="Typo.caption" Class="text-secondary">Không yêu cầu</MudText>
+                                }
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                            <CellTemplate>
+                                <MudTooltip Text="Xem Chi Tiết">
+                                    <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Info" OnClick="@(() => OpenOrderDetailDialog(context.Item))" />
+                                </MudTooltip>
+                                
+                                @if (context.Item.Status == "Pending")
+                                {
+                                    <MudTooltip Text="Chỉnh Sửa Đơn">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenEditOrderDialog(context.Item))" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Hủy Đơn">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteOrder(context.Item))" />
+                                    </MudTooltip>
+                                }
+                                else
+                                {
+                                    <MudTooltip Text="Đã khóa sửa đổi do đơn đang giao">
+                                        <MudIcon Icon="@Icons.Material.Filled.Lock" Size="Size.Small" Color="Color.Default" Class="mx-2" />
+                                    </MudTooltip>
+                                }
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                    <PagerContent>
+                        <MudDataGridPager T="SalesOrderDto" />
+                    </PagerContent>
+                </MudDataGrid>
+            }
+            </div>
+        </MudTabPanel>
+
+        <!-- Tab 2: Delivered Orders -->
+        <MudTabPanel Text="ĐƠN HÀNG ĐÃ GIAO" Icon="@Icons.Material.Filled.LocalShipping">
+            <div class="pa-6 bg-white rounded-b-xl">
+            @if (_loading)
+            {
+                <div class="d-flex justify-center my-8">
+                    <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                </div>
+            }
+            else
+            {
+                <MudDataGrid Items="@_orders.Where(o => o.Status == "Delivered")" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                    <ToolBarContent>
+                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Đã Giao</MudText>
+                        <MudSpacer />
+                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                    </ToolBarContent>
+                    <Columns>
+                        <PropertyColumn Property="x => x.OrderCode" Title="Mã Đơn" CellStyle="font-weight: bold; color: #2e7d32;" />
+                        <TemplateColumn Title="Khách Hàng">
+                            <CellTemplate>
+                                <div class="d-flex align-center gap-3">
+                                    @if (!string.IsNullOrEmpty(context.Item.CustomerAvatarUrl))
+                                    {
+                                        <MudAvatar Size="Size.Medium" Class="elevation-1">
+                                            <img src="@context.Item.CustomerAvatarUrl" style="width:100%; height:100%; object-fit:cover;" />
+                                        </MudAvatar>
+                                    }
+                                    else
+                                    {
+                                        <MudAvatar Color="Color.Success" Size="Size.Medium" Variant="Variant.Filled" Class="elevation-1">
+                                            @(!string.IsNullOrEmpty(context.Item.CustomerName) ? context.Item.CustomerName.Substring(0, 1).ToUpper() : "?")
+                                        </MudAvatar>
+                                    }
+                                    <MudText Typo="Typo.body2" Class="fw-bold">@context.Item.CustomerName</MudText>
+                                </div>
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn Title="Ngày Giao">
+                            <CellTemplate>
+                                @(context.Item.DeliveryDate.HasValue ? context.Item.DeliveryDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "---")
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <PropertyColumn Property="x => x.SalesNote" Title="Ghi chú Sale" />
+                        <TemplateColumn Title="Trạng Thế">
+                            <CellTemplate>
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.DoneAll">Đã Nhận Hàng</MudChip>
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn Title="S/N Status">
+                            <CellTemplate>
+                                <MudText Typo="Typo.caption" Class="fw-bold text-success">✔️ ĐÃ KÍCH HOẠT S/N</MudText>
+                            </CellTemplate>
+                        </TemplateColumn>
+                        <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                            <CellTemplate>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Visibility" Size="Size.Small" OnClick="@(() => OpenOrderDetailDialog(context.Item))" Class="rounded-lg">
+                                    Xem Chi Tiết
+                                </MudButton>
+                            </CellTemplate>
+                        </TemplateColumn>
+                    </Columns>
+                    <PagerContent>
+                        <MudDataGridPager T="SalesOrderDto" />
+                    </PagerContent>
+                </MudDataGrid>
+            }
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+@code {
+    private List<SalesOrderDto> _orders = new();
+    private bool _loading = true;
+    private string _searchString = "";
+    private HubConnection? _hubConnection;
+
+    private DashboardStats _stats = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On("OrderStateChanged", async () =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadOrders();
+            });
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    private async Task LoadOrders()
+    {
+        try
+        {
+            _orders = await Http.GetFromJsonAsync<List<SalesOrderDto>>("api/salesorders") ?? new List<SalesOrderDto>();
+            await ComputeStats();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải đơn hàng: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
+
+
+
+    private async Task ComputeStats()
+    {
+        try
+        {
+            var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new();
+            
+            var localToday = DateTime.Today;
+            var todayOrdersCount = _orders.Count(o => o.OrderDate.ToLocalTime().Date == localToday);
+            
+            var startOfWeek = localToday.AddDays(-(int)localToday.DayOfWeek + (int)DayOfWeek.Monday);
+            var weeklyOrdersCount = _orders.Count(o => o.OrderDate.ToLocalTime().Date >= startOfWeek);
+
+            var totalStock = models.Sum(m => m.StockQuantity);
+            var deliveredCount = _orders.Count(o => o.Status == "Delivered");
+
+            _stats = new DashboardStats
+            {
+                TodayOrders = todayOrdersCount,
+                WeeklyOrders = weeklyOrdersCount,
+                TotalStock = totalStock,
+                DeliveredOrders = deliveredCount
+            };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error calculating stats: {ex.Message}");
+        }
+    }
+
+    private Func<SalesOrderDto, bool> _quickFilter => x =>
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+            return true;
+        if (x.OrderCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (x.CustomerName.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        if (x.SalesNote.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return false;
+    };
+
+    private async Task OpenCreateOrderDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CreateOrderDialog>("Lên Đơn Hàng Mới", options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            await LoadOrders();
+        }
+    }
+
+    private async Task OpenEditOrderDialog(SalesOrderDto order)
+    {
+        var parameters = new DialogParameters { ["OrderToEdit"] = order };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CreateOrderDialog>("Chỉnh Sửa Đơn Hàng", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled)
+        {
+            await LoadOrders();
+        }
+    }
+
+    private async Task DeleteOrder(SalesOrderDto order)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận hủy đơn",
+            $"Bạn có chắc chắn muốn xóa/hủy đơn hàng {order.OrderCode} không?",
+            yesText: "Xóa đơn", cancelText: "Hủy bỏ");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"api/salesorders/{order.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Xóa đơn hàng thành công!", Severity.Success);
+                    await LoadOrders();
+                }
+                else
+                {
+                    Snackbar.Add("Hủy đơn thất bại. Có thể đơn hàng đã chuyển trạng thái.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    private async Task OpenOrderDetailDialog(SalesOrderDto order)
+    {
+        var parameters = new DialogParameters { ["Order"] = order };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<SalesOrderDetailViewDialog>("Chi Tiết Đơn Hàng", parameters, options);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+
+    public class DashboardStats
+    {
+        public int TodayOrders { get; set; }
+        public int WeeklyOrders { get; set; }
+        public int TotalStock { get; set; }
+        public int DeliveredOrders { get; set; }
+    }
+}

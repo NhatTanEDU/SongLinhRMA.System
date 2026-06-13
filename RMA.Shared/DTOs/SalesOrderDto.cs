@@ -12,6 +12,8 @@ namespace RMA.Shared.DTOs
         public DateTime OrderDate { get; set; }
         public DateTime? DeliveryDate { get; set; }
         public string Status { get; set; } = "Pending";
+        public string SalesNote { get; set; } = string.Empty;
+        public string CustomerAvatarUrl { get; set; } = string.Empty;
         public List<OrderDetailDto> Details { get; set; } = new List<OrderDetailDto>();
     }
 
@@ -21,6 +23,7 @@ namespace RMA.Shared.DTOs
         public string ModelName { get; set; } = string.Empty;
         public int Quantity { get; set; }
         public int WarrantyMonths { get; set; }
+        public string DeviceSpecs { get; set; } = string.Empty;
         public string Note { get; set; } = string.Empty;
         public bool IsSerialRequired { get; set; }
     }
@@ -28,6 +31,7 @@ namespace RMA.Shared.DTOs
     public class SalesOrderCreateDto
     {
         public string CustomerId { get; set; } = string.Empty;
+        public string SalesNote { get; set; } = string.Empty;
         public List<OrderDetailCreateDto> Details { get; set; } = new List<OrderDetailCreateDto>();
     }
 
@@ -35,6 +39,8 @@ namespace RMA.Shared.DTOs
     {
         public string ModelId { get; set; } = string.Empty;
         public int Quantity { get; set; }
+        public int? WarrantyMonths { get; set; }
+        public string DeviceSpecs { get; set; } = string.Empty;
         public string Note { get; set; } = string.Empty;
     }
 

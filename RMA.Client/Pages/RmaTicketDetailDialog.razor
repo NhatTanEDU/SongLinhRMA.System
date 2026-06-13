@@ -298,11 +298,11 @@
                                 {
                                     <div class="d-flex align-center gap-3 mb-2">
                                         <MudFileUpload T="IReadOnlyList<IBrowserFile>" FilesChanged="OnFilesChanged" Accept=".jpg,.jpeg,.png" MaximumFileCount="5">
-                                            <ActivatorContent>
-                                                <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.CloudUpload">
+                                            <CustomContent>
+                                                <MudButton HtmlTag="label" for="@context" Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.CloudUpload">
                                                     Chọn ảnh tải lên...
                                                 </MudButton>
-                                            </ActivatorContent>
+                                            </CustomContent>
                                         </MudFileUpload>
                                         @if (_uploading)
                                         {

@@ -1,0 +1,72 @@
+@page "/portal"
+@layout LoginLayout
+@inject NavigationManager NavigationManager
+
+<PageTitle>Chọn Không Gian Làm Việc - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="d-flex flex-column align-center justify-center" Style="min-height: 80vh;">
+    <!-- Logo and Welcome Message -->
+    <div class="mb-8 d-flex flex-column align-center w-100 text-center">
+        <div class="mb-4">
+            <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50,50 L50,0 A50,50 0 0,0 0,50 Z" fill="#E51D24" />
+                <path d="M50,50 L100,50 A50,50 0 0,0 50,0 Z" fill="#FFF200" />
+                <path d="M50,50 L0,50 A50,50 0 0,0 50,100 Z" fill="#FFF200" />
+                <path d="M50,50 L50,100 A50,50 0 0,0 100,50 Z" fill="#E51D24" />
+                <circle cx="50" cy="50" r="32" fill="#0072BC" stroke="#FFFFFF" stroke-width="2" />
+                <text x="50" y="55" font-family="'Arial Black', Impact, sans-serif" font-weight="900" font-size="14" fill="#E51D24" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" letter-spacing="1">SOLICOM</text>
+            </svg>
+        </div>
+        <MudText Typo="Typo.h4" Class="fw-bold mb-2" Style="color: #0072BC;">SONG LINH RMA SYSTEM</MudText>
+        <MudText Typo="Typo.h6" Class="text-secondary">Chào mừng trở lại. Vui lòng chọn không gian làm việc:</MudText>
+    </div>
+
+    <!-- Portal Cards -->
+    <MudGrid Justify="Justify.Center" Spacing="4" Class="w-100">
+        <!-- Sales Department Card -->
+        <MudItem xs="12" sm="6">
+            <MudCard Elevation="4" 
+                     Class="cursor-pointer rounded-xl hover-card d-flex flex-column align-center justify-center pa-8 text-center h-100" 
+                     Style="border-top: 6px solid #0072BC;"
+                     @onclick='() => NavigateTo("/sales-dashboard")'>
+                <div class="pa-5 rounded-circle mb-4" style="background-color: rgba(0, 114, 188, 0.1);">
+                    <MudIcon Icon="@Icons.Material.Filled.Storefront" Style="font-size: 3rem;" Color="Color.Primary" />
+                </div>
+                <MudText Typo="Typo.h5" Class="fw-bold mb-3" Style="color: #0072BC;">PHÒNG KINH DOANH</MudText>
+                <MudText Typo="Typo.body2" Class="text-secondary">Quản lý đơn hàng, theo dõi giao nhận và kích hoạt bảo hành.</MudText>
+            </MudCard>
+        </MudItem>
+
+        <!-- Technical & Warranty Department Card -->
+        <MudItem xs="12" sm="6">
+            <MudCard Elevation="4" 
+                     Class="cursor-pointer rounded-xl hover-card d-flex flex-column align-center justify-center pa-8 text-center h-100" 
+                     Style="border-top: 6px solid #E51D24;"
+                     @onclick='() => NavigateTo("/tech/dashboard")'>
+                <div class="pa-5 rounded-circle mb-4" style="background-color: rgba(229, 29, 36, 0.1);">
+                    <MudIcon Icon="@Icons.Material.Filled.Build" Style="font-size: 3rem;" Color="Color.Secondary" />
+                </div>
+                <MudText Typo="Typo.h5" Class="fw-bold mb-3" Style="color: #E51D24;">KỸ THUẬT & BẢO HÀNH</MudText>
+                <MudText Typo="Typo.body2" Class="text-secondary">Tiếp nhận thiết bị, xử lý kiểm tra kỹ thuật và quản lý phiếu RMA.</MudText>
+            </MudCard>
+        </MudItem>
+    </MudGrid>
+</MudContainer>
+
+<style>
+    .hover-card {
+        transition: transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1), box-shadow 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        cursor: pointer;
+    }
+    .hover-card:hover {
+        transform: translateY(-8px);
+        box-shadow: 0 14px 28px rgba(0,0,0,0.15), 0 10px 10px rgba(0,0,0,0.12) !important;
+    }
+</style>
+
+@code {
+    private void NavigateTo(string route)
+    {
+        NavigationManager.NavigateTo(route);
+    }
+}

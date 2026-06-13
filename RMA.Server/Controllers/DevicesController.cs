@@ -45,7 +45,8 @@ public class DevicesController : ControllerBase
             ModelName = models.ContainsKey(d.ModelId) ? models[d.ModelId].ModelName : string.Empty,
             Brand = models.ContainsKey(d.ModelId) ? models[d.ModelId].Brand : string.Empty,
             PurchaseDate = d.PurchaseDate,
-            WarrantyExpiry = d.WarrantyExpiry
+            WarrantyExpiry = d.WarrantyExpiry,
+            OrderId = d.OrderId
         });
 
         return Ok(dtos);
@@ -70,8 +71,33 @@ public class DevicesController : ControllerBase
             ModelName = m?.ModelName ?? string.Empty,
             Brand = m?.Brand,
             PurchaseDate = d.PurchaseDate,
-            WarrantyExpiry = d.WarrantyExpiry
+            WarrantyExpiry = d.WarrantyExpiry,
+            OrderId = d.OrderId
         };
+    }
+
+    [HttpGet("by-order/{orderId}")]
+    public async Task<ActionResult<IEnumerable<DeviceDto>>> GetByOrder(string orderId)
+    {
+        var devices = await _deviceRepo.GetByFieldAsync("OrderId", orderId);
+        var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c.Name);
+        var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+
+        var dtos = devices.Select(d => new DeviceDto
+        {
+            Id = d.Id,
+            SerialNumber = d.SerialNumber,
+            CustomerId = d.CustomerId,
+            CustomerName = customers.ContainsKey(d.CustomerId) ? customers[d.CustomerId] : string.Empty,
+            ModelId = d.ModelId,
+            ModelName = models.ContainsKey(d.ModelId) ? models[d.ModelId].ModelName : string.Empty,
+            Brand = models.ContainsKey(d.ModelId) ? models[d.ModelId].Brand : string.Empty,
+            PurchaseDate = d.PurchaseDate,
+            WarrantyExpiry = d.WarrantyExpiry,
+            OrderId = d.OrderId
+        });
+
+        return Ok(dtos);
     }
 
     [HttpPost]

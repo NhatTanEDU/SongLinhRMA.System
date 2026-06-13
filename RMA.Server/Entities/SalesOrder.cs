@@ -45,6 +45,9 @@ namespace RMA.Server.Entities
         public int WarrantyMonths { get; set; }
 
         [FirestoreProperty]
+        public string DeviceSpecs { get; set; } = string.Empty;
+
+        [FirestoreProperty]
         public string Note { get; set; } = string.Empty;
     }
 }

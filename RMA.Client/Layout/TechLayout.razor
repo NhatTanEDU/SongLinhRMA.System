@@ -1,0 +1,151 @@
+@inherits LayoutComponentBase
+@using RMA.Shared.DTOs
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+@inject HttpClient Http
+@implements IAsyncDisposable
+
+<MudThemeProvider Theme="@_techTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Warning" Style="background-color: #E51D24; color: white;">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudText Typo="Typo.h5" Class="ml-3 fw-bold">SOLICOM TECH & SERVICE</MudText>
+        <MudSpacer />
+        
+        <MudBadge Content="@_pendingCount" Color="Color.Error" Overlap="true" Visible="@(_pendingCount > 0)" Class="mr-5">
+            <MudIconButton Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Inherit" OnClick="OpenPendingDeliveries" title="Đơn chờ giao" />
+        </MudBadge>
+
+        <AuthorizeView>
+            <Authorized>
+                <MudText Typo="Typo.body1" Class="mr-4">Tech: @context.User.Identity?.Name</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" OnClick="Logout" Style="border-color: white;">Đăng xuất</MudButton>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
+        <div class="pa-4 d-flex flex-column align-center" style="border-bottom: 1px solid #e0e0e0;">
+            <svg width="50" height="50" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50,50 L50,0 A50,50 0 0,0 0,50 Z" fill="#E51D24" />
+                <path d="M50,50 L100,50 A50,50 0 0,0 50,0 Z" fill="#FFF200" />
+                <path d="M50,50 L0,50 A50,50 0 0,0 50,100 Z" fill="#FFF200" />
+                <path d="M50,50 L50,100 A50,50 0 0,0 100,50 Z" fill="#E51D24" />
+                <circle cx="50" cy="50" r="32" fill="#0072BC" stroke="#FFFFFF" stroke-width="2" />
+                <text x="50" y="55" font-family="'Arial Black', Impact, sans-serif" font-weight="900" font-size="14" fill="#E51D24" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" letter-spacing="1">SOLICOM</text>
+            </svg>
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mt-2" Color="Color.Secondary">KỸ THUẬT & BẢO HÀNH</MudText>
+        </div>
+        <MudNavMenu>
+            <MudNavLink Href="/tech/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Bảng điều khiển</MudNavLink>
+            <MudNavLink Href="/tickets" Icon="@Icons.Material.Filled.ConfirmationNumber">RMA Tickets</MudNavLink>
+            
+            <MudNavLink Href="/tech/deliveries" Icon="@Icons.Material.Filled.LocalShipping">
+                <div class="d-flex align-center justify-space-between w-100">
+                    <span>Đơn chờ giao</span>
+                    @if (_pendingCount > 0)
+                    {
+                        <MudBadge Content="@_pendingCount" Color="Color.Error" Overlap="false" Class="ml-2" />
+                    }
+                </div>
+            </MudNavLink>
+
+            <MudNavLink Href="/tech/customers" Icon="@Icons.Material.Filled.People">Khách hàng</MudNavLink>
+            <MudNavLink Href="/tech/devices" Icon="@Icons.Material.Filled.Devices">Thiết bị</MudNavLink>
+            <MudNavLink Href="/brands" Icon="@Icons.Material.Filled.BrandingWatermark">Hãng sản xuất</MudNavLink>
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="/portal" Icon="@Icons.Material.Filled.SwapHoriz" Style="color: #0072BC;">Đổi phòng ban</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="bg-light">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4 pb-8">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+    private int _pendingCount = 0;
+    private HubConnection? _hubConnection;
+
+    private MudTheme _techTheme = new MudTheme()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#E51D24", // SOLICOM Red
+            Secondary = "#0072BC", // SOLICOM Blue
+            Warning = "#FFF200", // SOLICOM Yellow
+            AppbarBackground = "#E51D24",
+            Background = "#f4f6f8"
+        }
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadPendingCount();
+
+        _hubConnection = new HubConnectionBuilder()
+            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithAutomaticReconnect()
+            .Build();
+
+        _hubConnection.On("OrderStateChanged", async () =>
+        {
+            await InvokeAsync(async () =>
+            {
+                await LoadPendingCount();
+            });
+        });
+
+        await _hubConnection.StartAsync();
+    }
+
+    private async Task LoadPendingCount()
+    {
+        try
+        {
+            var pending = await Http.GetFromJsonAsync<List<SalesOrderDto>>("api/salesorders/pending");
+            _pendingCount = pending?.Count ?? 0;
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error fetching pending deliveries: {ex.Message}");
+        }
+    }
+
+
+
+    private void OpenPendingDeliveries()
+    {
+        NavigationManager.NavigateTo("/tech/deliveries");
+    }
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void Logout()
+    {
+        if (AuthStateProvider is MockAuthStateProvider mockProvider)
+        {
+            mockProvider.MarkUserAsLoggedOut();
+            NavigationManager.NavigateTo("/login");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_hubConnection is not null)
+        {
+            await _hubConnection.DisposeAsync();
+        }
+    }
+}

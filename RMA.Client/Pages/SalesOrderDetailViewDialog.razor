@@ -1,0 +1,132 @@
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<MudDialog>
+    <DialogContent>
+        <MudGrid>
+            <!-- Info Cards -->
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Khách Hàng</MudText>
+                <MudText Typo="Typo.body1" Class="fw-bold">@Order.CustomerName</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Mã Đơn Hàng</MudText>
+                <MudText Typo="Typo.body1" Class="fw-bold" Style="color: #0072BC;">@Order.OrderCode</MudText>
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ngày Tạo</MudText>
+                <MudText Typo="Typo.body1">@Order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ngày Giao Hàng</MudText>
+                <MudText Typo="Typo.body1">@(Order.DeliveryDate.HasValue ? Order.DeliveryDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Chưa giao hàng")</MudText>
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Trạng Thái</MudText>
+                @if (Order.Status == "Pending")
+                {
+                    <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">Chờ Giao</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">Đã Giao</MudChip>
+                }
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ghi Chú Đơn Hàng</MudText>
+                <MudText Typo="Typo.body1" Style="font-style: italic;">@(string.IsNullOrWhiteSpace(Order.SalesNote) ? "Không có" : Order.SalesNote)</MudText>
+            </MudItem>
+
+            <!-- Order Items Detail Table -->
+            <MudItem xs="12" Class="mt-4">
+                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC; margin-bottom: 8px;">Danh Sách Sản Phẩm</MudText>
+                <MudTable Items="@Order.Details" Dense="true" Outlined="true" Elevation="1" Class="rounded-lg">
+                    <HeaderContent>
+                        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thiết bị (Model)</MudText></MudTh>
+                        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Số lượng</MudText></MudTh>
+                        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Bảo hành</MudText></MudTh>
+                        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Ghi chú dòng</MudText></MudTh>
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="Thiết bị">@context.ModelName</MudTd>
+                        <MudTd DataLabel="Số lượng">@context.Quantity</MudTd>
+                        <MudTd DataLabel="Bảo hành">@context.WarrantyMonths tháng</MudTd>
+                        <MudTd DataLabel="Ghi chú dòng">@context.Note</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudItem>
+
+            <!-- Serials List (if Delivered) -->
+            @if (Order.Status == "Delivered")
+            {
+                <MudItem xs="12" Class="mt-4">
+                    <MudText Typo="Typo.h6" Class="fw-bold text-success" Style="margin-bottom: 8px;">Danh Sách Số Serial Đã Kích Hoạt</MudText>
+                    @if (_loadingSerials)
+                    {
+                        <div class="d-flex align-center gap-3">
+                            <MudProgressCircular Color="Color.Success" Size="Size.Small" Indeterminate="true" />
+                            <MudText Typo="Typo.body2" Class="text-secondary">Đang tải danh sách Serial...</MudText>
+                        </div>
+                    }
+                    else if (!_devices.Any())
+                    {
+                        <MudText Typo="Typo.body2" Class="text-secondary">Không tìm thấy thông tin Serial nào cho đơn hàng này.</MudText>
+                    }
+                    else
+                    {
+                        <MudGrid>
+                            @foreach (var device in _devices)
+                            {
+                                <MudItem xs="12" sm="4" md="3">
+                                    <MudPaper Class="pa-3 rounded-lg d-flex align-center gap-2 border-solid" Style="border: 1px solid #e0e0e0; background-color: #fafafa;">
+                                        <MudIcon Icon="@Icons.Material.Filled.QrCode" Color="Color.Success" Size="Size.Small" />
+                                        <div>
+                                            <MudText Typo="Typo.caption" Class="text-secondary">@device.ModelName</MudText>
+                                            <MudText Typo="Typo.body2" Class="fw-bold">@device.SerialNumber</MudText>
+                                        </div>
+                                    </MudPaper>
+                                </MudItem>
+                            }
+                        </MudGrid>
+                    }
+                </MudItem>
+            }
+        </MudGrid>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Color="Color.Primary" OnClick="Close" Variant="Variant.Filled" Class="rounded-lg">Đóng</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public SalesOrderDto Order { get; set; } = new();
+
+    private List<DeviceDto> _devices = new();
+    private bool _loadingSerials = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Order.Status == "Delivered")
+        {
+            _loadingSerials = true;
+            try
+            {
+                _devices = await Http.GetFromJsonAsync<List<DeviceDto>>($"api/devices/by-order/{Order.Id}") ?? new List<DeviceDto>();
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi tải serials: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _loadingSerials = false;
+            }
+        }
+    }
+
+    private void Close() => MudDialog.Close();
+}

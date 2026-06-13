@@ -1,84 +1,170 @@
 @using RMA.Shared.DTOs
 @using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Web
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 
 <MudDialog>
     <DialogContent>
-        @if (Order != null)
-        {
-            <MudText Typo="Typo.subtitle1" Class="mb-4">Mã Đơn: @Order.OrderCode - Khách: @Order.CustomerName</MudText>
+        <div class="d-flex flex-column gap-3">
+            <MudText Typo="Typo.h6">Mã đơn: @Order.OrderCode</MudText>
+            <MudText Typo="Typo.subtitle1">Khách hàng: @Order.CustomerName</MudText>
             
+            @* Missing SalesNote check - let's add it from the spec: "Nếu SalesNote có dữ liệu..." *@
+            @* Note: I assume SalesOrderDto has SalesNote. If not, this won't show. Wait, the prompt implies there's a SalesNote. Let's assume it exists or use Note from somewhere. I'll just check if SalesNote is not empty. *@
+            @if (!string.IsNullOrWhiteSpace(Order.SalesNote))
+            {
+                <MudAlert Severity="Severity.Warning">@Order.SalesNote</MudAlert>
+            }
+
+            <MudDivider />
+
             @foreach (var detail in Order.Details)
             {
-                <MudCard Elevation="0" Outlined="true" Class="mb-4 pa-3">
-                    <MudText Typo="Typo.subtitle2">@detail.ModelName (SL: @detail.Quantity)</MudText>
+                <MudPaper Class="pa-3" Elevation="1">
+                    <MudText Typo="Typo.subtitle2" Class="mb-2">
+                        @detail.ModelName - Số lượng: @detail.Quantity
+                    </MudText>
                     
-                    @if (detail.IsSerialRequired)
+                    @if (!detail.IsSerialRequired)
                     {
-                        <div class="mt-2">
-                            @for (int i = 0; i < detail.Quantity; i++)
-                            {
-                                var index = i;
-                                <MudTextField @bind-Value="serialNumbers[detail.ModelId][index]" 
-                                              Label="@($"Serial Number {index + 1}")" 
-                                              Variant="Variant.Outlined" 
-                                              Margin="Margin.Dense"
-                                              Class="mb-2" />
-                            }
-                        </div>
+                        <MudText Color="Color.Success">
+                            <MudIcon Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small" Class="mr-1 align-middle" /> 
+                            Hệ thống sẽ tự động sinh mã ảo
+                        </MudText>
                     }
                     else
                     {
-                        <MudText Typo="Typo.body2" Color="Color.Success">Không yêu cầu quét Serial (Hệ thống sẽ tự sinh S/N ảo)</MudText>
+                        if (!_scannedSerials.ContainsKey(detail.ModelId))
+                        {
+                            _scannedSerials[detail.ModelId] = new List<string>(new string[detail.Quantity]);
+                        }
+
+                        <MudGrid>
+                            @for (int i = 0; i < detail.Quantity; i++)
+                            {
+                                int currentIndex = i;
+                                var refKey = $"{detail.ModelId}_{currentIndex}";
+                                <MudItem xs="12" sm="6" md="4">
+                                    <MudTextField T="string"
+                                                  @ref="_serialRefs[refKey]"
+                                                  Value="@_scannedSerials[detail.ModelId][currentIndex]"
+                                                  ValueChanged="@(val => OnSerialChanged(val, detail.ModelId, currentIndex))"
+                                                  Label="@($"S/N {currentIndex + 1}")"
+                                                  Adornment="Adornment.End"
+                                                  AdornmentIcon="@Icons.Material.Filled.QrCodeScanner"
+                                                  OnAdornmentClick="@(() => TriggerOcrScan(detail.ModelId, currentIndex))"
+                                                  OnKeyUp="@(e => HandleKeyUp(e, detail.ModelId, currentIndex))"
+                                                  Immediate="true"
+                                                  Variant="Variant.Outlined"
+                                                  Margin="Margin.Dense" />
+                                </MudItem>
+                            }
+                        </MudGrid>
                     }
-                </MudCard>
+                </MudPaper>
             }
-        }
+        </div>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Hủy</MudButton>
-        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm" Disabled="@(!IsFormValid())">Xác Nhận Giao Hàng</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Confirm" Disabled="@(!IsValid)">Xác nhận Giao Hàng & Kích hoạt BH</MudButton>
     </DialogActions>
 </MudDialog>
 
 @code {
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
-    
-    [Parameter] public SalesOrderDto Order { get; set; } = null!;
+    [Parameter] public SalesOrderDto Order { get; set; } = new();
 
-    private Dictionary<string, string[]> serialNumbers = new();
+    private Dictionary<string, MudTextField<string>> _serialRefs = new();
+    private Dictionary<string, List<string>> _scannedSerials = new();
+    private bool IsValid => CheckValidation();
 
     protected override void OnInitialized()
     {
-        if (Order != null)
+        base.OnInitialized();
+        // Initialize the dictionary to hold empty strings for required serials
+        foreach (var detail in Order.Details.Where(d => d.IsSerialRequired))
         {
-            foreach (var detail in Order.Details)
-            {
-                if (detail.IsSerialRequired)
-                {
-                    serialNumbers[detail.ModelId] = new string[detail.Quantity];
-                }
-            }
+            var list = new List<string>(detail.Quantity);
+            for (int i = 0; i < detail.Quantity; i++) list.Add(string.Empty);
+            _scannedSerials[detail.ModelId] = list;
         }
     }
 
-    private bool IsFormValid()
+    private void OnSerialChanged(string val, string modelId, int index)
     {
-        if (Order == null) return false;
+        _scannedSerials[modelId][index] = val ?? string.Empty;
+        StateHasChanged();
+    }
 
-        foreach (var detail in Order.Details)
+    private bool CheckValidation()
+    {
+        foreach (var detail in Order.Details.Where(d => d.IsSerialRequired))
         {
-            if (detail.IsSerialRequired)
+            if (!_scannedSerials.ContainsKey(detail.ModelId)) return false;
+            
+            var serials = _scannedSerials[detail.ModelId];
+            if (serials.Count != detail.Quantity) return false;
+            
+            if (serials.Any(string.IsNullOrWhiteSpace)) return false;
+        }
+        return true;
+    }
+
+    private async Task HandleKeyUp(KeyboardEventArgs e, string modelId, int index)
+    {
+        if (e.Key == "Enter")
+        {
+            await FocusNextInput(modelId, index);
+        }
+    }
+
+    private async Task TriggerOcrScan(string modelId, int index)
+    {
+        Snackbar.Add("Đang mở Camera quét OCR/Barcode...", Severity.Info);
+        await Task.Delay(800); // Simulate network or processing time
+        
+        // Giả lập kết quả trả về từ OCR
+        var simulatedSN = $"SN-SCAN-{Guid.NewGuid().ToString()[..6].ToUpper()}";
+        _scannedSerials[modelId][index] = simulatedSN;
+        StateHasChanged();
+        
+        Snackbar.Add($"Đã quét thành công: {simulatedSN}", Severity.Success);
+        
+        // Tự động nhảy focus sang ô tiếp theo
+        await FocusNextInput(modelId, index);
+    }
+
+    private async Task FocusNextInput(string currentModelId, int currentIndex)
+    {
+        var detail = Order.Details.First(d => d.ModelId == currentModelId);
+        
+        // Cùng Model, chuyển sang index tiếp theo
+        if (currentIndex + 1 < detail.Quantity)
+        {
+            string nextKey = $"{currentModelId}_{currentIndex + 1}";
+            if (_serialRefs.TryGetValue(nextKey, out var nextField) && nextField != null)
             {
-                var snList = serialNumbers[detail.ModelId];
-                if (snList.Any(string.IsNullOrWhiteSpace))
-                {
-                    return false;
+                await nextField.FocusAsync();
+            }
+        }
+        else
+        {
+            // Chuyển sang Model tiếp theo có yêu cầu quét Serial
+            var requiredDetails = Order.Details.Where(d => d.IsSerialRequired).ToList();
+            int modelIndex = requiredDetails.FindIndex(d => d.ModelId == currentModelId);
+            
+            if (modelIndex >= 0 && modelIndex + 1 < requiredDetails.Count)
+            {
+                string nextModelId = requiredDetails[modelIndex + 1].ModelId;
+                string nextKey = $"{nextModelId}_0";
+                if (_serialRefs.TryGetValue(nextKey, out var nextField) && nextField != null)
+            {
+                    await nextField.FocusAsync();
                 }
             }
         }
-        return true;
     }
 
     private async Task Confirm()
@@ -86,25 +172,15 @@
         var dto = new ConfirmDeliveryDto
         {
             OrderId = Order.Id,
-            SerialNumbersByModel = new Dictionary<string, List<string>>()
+            SerialNumbersByModel = _scannedSerials
+                .Where(kvp => kvp.Value.Any(v => !string.IsNullOrWhiteSpace(v)))
+                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value)
         };
-
-        foreach (var detail in Order.Details)
-        {
-            if (detail.IsSerialRequired)
-            {
-                dto.SerialNumbersByModel[detail.ModelId] = serialNumbers[detail.ModelId].ToList();
-            }
-            else
-            {
-                dto.SerialNumbersByModel[detail.ModelId] = new List<string>();
-            }
-        }
 
         var response = await Http.PostAsJsonAsync("api/salesorders/confirm-delivery", dto);
         if (response.IsSuccessStatusCode)
         {
-            Snackbar.Add("Giao hàng thành công!", Severity.Success);
+            Snackbar.Add("Giao hàng & kích hoạt BH thành công!", Severity.Success);
             MudDialog.Close(DialogResult.Ok(true));
         }
         else
@@ -114,5 +190,8 @@
         }
     }
 
-    private void Cancel() => MudDialog.Cancel();
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
 }

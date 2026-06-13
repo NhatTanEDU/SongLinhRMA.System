@@ -1,254 +1,34 @@
 @page "/"
-@using RMA.Shared.DTOs
-@inject RMA.Client.Services.IRmaTicketService TicketService
-
-<PageTitle>Trang Chủ - SOLICOM</PageTitle>
-
-<MudContainer MaxWidth="MaxWidth.Large" Class="mt-8">
-    <!-- Hero Banner -->
-    <MudPaper Elevation="4" Class="pa-8 mb-8 rounded-xl" Style="background: linear-gradient(135deg, #0072BC 0%, #005A96 100%); color: white; position: relative; overflow: hidden;">
-        <!-- Background Pattern -->
-        <div style="position: absolute; top: -50%; left: -10%; width: 50%; height: 200%; background: rgba(255, 242, 0, 0.05); transform: rotate(30deg);"></div>
-        <div style="position: absolute; top: -20%; right: -20%; width: 40%; height: 150%; background: rgba(229, 29, 36, 0.1); transform: rotate(-15deg); border-radius: 50%;"></div>
-        
-        <MudGrid>
-            <MudItem xs="12" md="3" Class="d-flex justify-center align-center">
-                <!-- Company Logo -->
-                <div class="pa-4 rounded-circle" style="background-color: white; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
-                    <svg width="120" height="120" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M50,50 L50,0 A50,50 0 0,0 0,50 Z" fill="#E51D24" />
-                        <path d="M50,50 L100,50 A50,50 0 0,0 50,0 Z" fill="#FFF200" />
-                        <path d="M50,50 L0,50 A50,50 0 0,0 50,100 Z" fill="#FFF200" />
-                        <path d="M50,50 L50,100 A50,50 0 0,0 100,50 Z" fill="#E51D24" />
-                        <circle cx="50" cy="50" r="32" fill="#0072BC" stroke="#FFFFFF" stroke-width="2" />
-                        <text x="50" y="55" font-family="'Arial Black', Impact, sans-serif" font-weight="900" font-size="14" fill="#E51D24" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" letter-spacing="1">SOLICOM</text>
-                    </svg>
-                </div>
-            </MudItem>
-            <MudItem xs="12" md="9" Class="d-flex flex-column justify-center" Style="z-index: 1;">
-                <MudText Typo="Typo.h3" Class="fw-bold mb-2">CÔNG TY TNHH THƯƠNG MẠI VÀ DỊCH VỤ SONG LINH</MudText>
-                <MudText Typo="Typo.h5" Class="mb-4" Style="color: #FFF200;">Hệ Thống Quản Lý Bảo Hành & Thiết Bị (RMA System)</MudText>
-                <div class="d-flex flex-wrap gap-4 mt-2">
-                    <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Receipt" Variant="Variant.Filled">MST: 3500904295</MudChip>
-                    <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Phone" Variant="Variant.Filled" Style="color: black;">+84 254-356-3368</MudChip>
-                    <MudChip T="string" Color="Color.Info" Icon="@Icons.Material.Filled.LocationOn" Variant="Variant.Filled">Số 63, Đường 30/4, P. Rạch Dừa, TP. Vũng Tàu</MudChip>
-                </div>
-            </MudItem>
-        </MudGrid>
-    </MudPaper>
-
-    <!-- Services Overview -->
-    <MudText Typo="Typo.h4" Class="fw-bold mb-6 text-center" Style="color: #0072BC;">LĨNH VỰC HOẠT ĐỘNG & DỊCH VỤ</MudText>
-    
-    <MudGrid>
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="3" Class="h-100 rounded-lg hover-up">
-                <MudCardHeader>
-                    <CardHeaderAvatar>
-                        <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Style="background-color: #0072BC;">
-                            <MudIcon Icon="@Icons.Material.Filled.Engineering" />
-                        </MudAvatar>
-                    </CardHeaderAvatar>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6" Class="fw-bold">Bảo hành & Sửa chữa</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudText Typo="Typo.body2">Dịch vụ RMA chuyên nghiệp, tiếp nhận, xử lý và bảo hành các thiết bị viễn thông, CNTT nhanh chóng với quy trình chuẩn.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="3" Class="h-100 rounded-lg hover-up">
-                <MudCardHeader>
-                    <CardHeaderAvatar>
-                        <MudAvatar Color="Color.Error" Variant="Variant.Filled" Style="background-color: #E51D24;">
-                            <MudIcon Icon="@Icons.Material.Filled.Computer" />
-                        </MudAvatar>
-                    </CardHeaderAvatar>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6" Class="fw-bold">Thương mại Thiết bị</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudText Typo="Typo.body2">Cung cấp thiết bị điện tử, tin học, thiết bị mạng chính hãng đáp ứng mọi nhu cầu của doanh nghiệp và cá nhân.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="3" Class="h-100 rounded-lg hover-up">
-                <MudCardHeader>
-                    <CardHeaderAvatar>
-                        <MudAvatar Color="Color.Warning" Variant="Variant.Filled" Style="background-color: #FFF200; color: #E51D24;">
-                            <MudIcon Icon="@Icons.Material.Filled.SupportAgent" />
-                        </MudAvatar>
-                    </CardHeaderAvatar>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6" Class="fw-bold">Bảo trì Hệ thống</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudText Typo="Typo.body2">Dịch vụ bảo trì định kỳ, nâng cấp hệ thống phần cứng và phần mềm, đảm bảo thiết bị hoạt động ổn định và liên tục.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-
-        <MudItem xs="12" sm="6" md="3">
-            <MudCard Elevation="3" Class="h-100 rounded-lg hover-up">
-                <MudCardHeader>
-                    <CardHeaderAvatar>
-                        <MudAvatar Color="Color.Success" Variant="Variant.Filled">
-                            <MudIcon Icon="@Icons.Material.Filled.LocalShipping" />
-                        </MudAvatar>
-                    </CardHeaderAvatar>
-                    <CardHeaderContent>
-                        <MudText Typo="Typo.h6" Class="fw-bold">Logistics & Phân phối</MudText>
-                    </CardHeaderContent>
-                </MudCardHeader>
-                <MudCardContent>
-                    <MudText Typo="Typo.body2">Vận chuyển và phân phối hàng hóa, thiết bị tới tận tay khách hàng an toàn với mạng lưới logistics rộng khắp.</MudText>
-                </MudCardContent>
-            </MudCard>
-        </MudItem>
-    </MudGrid>
-
-    <!-- Dashboard Statistics -->
-    <MudText Typo="Typo.h4" Class="fw-bold mb-6 text-center mt-12" Style="color: #0072BC;">BẢNG ĐIỀU KHIỂN & THỐNG KÊ (DASHBOARD)</MudText>
-
-    @if (_loading)
-    {
-        <div class="d-flex justify-center my-8">
-            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
-        </div>
-    }
-    else if (_summary != null)
-    {
-        <MudGrid Class="mb-8">
-            <!-- Card 1: Tổng số phiếu đang xử lý -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #2196f3;" @onclick='() => NavigationManager.NavigateTo("/tickets")'>
-                    <MudAvatar Color="Color.Info" Variant="Variant.Filled" Size="Size.Large">
-                        <MudIcon Icon="@Icons.Material.Filled.Assignment" />
-                    </MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Phiếu Đang Xử Lý</MudText>
-                        <MudText Typo="Typo.h4" Class="fw-bold">@_summary.TotalOpenTickets</MudText>
-                    </div>
-                </MudPaper>
-            </MudItem>
-
-            <!-- Card 2: Phiếu khẩn cấp -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 blinking-border cursor-pointer hover-up" Style="border-left: 6px solid #ff1744;" @onclick='() => NavigationManager.NavigateTo("/tickets?UrgentFilter=true")'>
-                    <MudAvatar Color="Color.Error" Variant="Variant.Filled" Size="Size.Large">
-                        <MudIcon Icon="@Icons.Material.Filled.Warning" />
-                    </MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Yêu Cầu GẤP</MudText>
-                        <MudText Typo="Typo.h4" Class="fw-bold text-danger">@_summary.UrgentTickets</MudText>
-                    </div>
-                </MudPaper>
-            </MudItem>
-
-            <!-- Card 3: Phiếu sắp trễ hạn (10-13 ngày) -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #ffb300;" @onclick='() => NavigationManager.NavigateTo("/tickets?ColorFilter=Yellow")'>
-                    <MudAvatar Color="Color.Warning" Variant="Variant.Filled" Size="Size.Large" Style="background-color: #ffb300; color: black;">
-                        <MudIcon Icon="@Icons.Material.Filled.HourglassEmpty" />
-                    </MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Sắp Tới Hạn (Vàng)</MudText>
-                        <MudText Typo="Typo.h4" Class="fw-bold text-warning-custom">@_summary.YellowAlertTickets</MudText>
-                    </div>
-                </MudPaper>
-            </MudItem>
-
-            <!-- Card 4: Phiếu trễ hạn (>= 14 ngày) -->
-            <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="3" Class="pa-6 rounded-lg d-flex align-center gap-4 cursor-pointer hover-up" Style="border-left: 6px solid #d50000;" @onclick='() => NavigationManager.NavigateTo("/tickets?ColorFilter=Red")'>
-                    <MudAvatar Color="Color.Error" Variant="Variant.Filled" Size="Size.Large">
-                        <MudIcon Icon="@Icons.Material.Filled.Dangerous" />
-                    </MudAvatar>
-                    <div>
-                        <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">QUÁ HẠN (Đỏ)</MudText>
-                        <MudText Typo="Typo.h4" Class="fw-bold text-danger">@_summary.RedAlertTickets</MudText>
-                    </div>
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
-
-        <div class="d-flex justify-center mb-8">
-            <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.BarChart" Size="Size.Large" OnClick='() => NavigationManager.NavigateTo("/analytics")' Class="rounded-lg px-6" Style="background-color: #0072BC;">
-                📊 Xem Biểu Đồ & Thống Kê Chi Tiết
-            </MudButton>
-        </div>
-    }
-
-    <!-- Quick Access / Statistics -->
-    <MudGrid Class="mt-8">
-        <MudItem xs="12" md="8">
-            <MudPaper Elevation="2" Class="pa-6 rounded-lg" Style="border-left: 5px solid #0072BC;">
-                <MudText Typo="Typo.h5" Class="fw-bold mb-4" Style="color: #0072BC;">Theo dõi RMA (Return Merchandise Authorization)</MudText>
-                <MudText Typo="Typo.body1" Class="mb-4">Hệ thống của chúng tôi cho phép bạn tạo mới, theo dõi trạng thái, và quản lý các thiết bị cần bảo hành hoặc sửa chữa một cách minh bạch và nhanh chóng nhất.</MudText>
-                <MudButton Variant="Variant.Filled" Color="Color.Primary" Href="/tickets" EndIcon="@Icons.Material.Filled.ArrowForward" Style="background-color: #E51D24;">Quản lý Tickets ngay</MudButton>
-            </MudPaper>
-        </MudItem>
-        <MudItem xs="12" md="4">
-            <MudPaper Elevation="2" Class="pa-6 rounded-lg d-flex flex-column align-center justify-center h-100" Style="border-top: 5px solid #FFF200;">
-                <MudIcon Icon="@Icons.Material.Filled.Support" Style="font-size: 4rem; color: #0072BC;" Class="mb-2" />
-                <MudText Typo="Typo.h6" Class="fw-bold text-center">Hỗ trợ Khách hàng</MudText>
-                <MudText Typo="Typo.body2" Class="text-center mt-2">Hotline: +84 254-356-3368</MudText>
-                <MudText Typo="Typo.body2" Class="text-center">Fax: +84 254-356-3369</MudText>
-            </MudPaper>
-        </MudItem>
-    </MudGrid>
-</MudContainer>
-
+@using Microsoft.AspNetCore.Components.Authorization
+@using System.Security.Claims
 @inject NavigationManager NavigationManager
-
-<style>
-    .hover-up {
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .hover-up:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.1) !important;
-    }
-    .text-danger { color: #d50000 !important; }
-    .text-warning-custom { color: #ffb300 !important; }
-    .blinking-border {
-        border: 1px solid rgba(255, 23, 68, 0.4);
-        animation: blinkBorder 1.5s infinite;
-    }
-    @@keyframes blinkBorder {
-        0% { border-color: rgba(255, 23, 68, 0.4); box-shadow: 0 0 2px rgba(255, 23, 68, 0.2); }
-        50% { border-color: rgba(255, 23, 68, 1); box-shadow: 0 0 10px rgba(255, 23, 68, 0.4); }
-        100% { border-color: rgba(255, 23, 68, 0.4); box-shadow: 0 0 2px rgba(255, 23, 68, 0.2); }
-    }
-    .cursor-pointer {
-        cursor: pointer;
-    }
-</style>
+@inject AuthenticationStateProvider AuthStateProvider
+@attribute [AllowAnonymous]
 
 @code {
-    private bool _loading = true;
-    private DashboardSummaryDto? _summary;
-
     protected override async Task OnInitializedAsync()
     {
-        try
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity == null || !user.Identity.IsAuthenticated)
         {
-            _summary = await TicketService.GetDashboardSummaryAsync();
+            NavigationManager.NavigateTo("/login");
+            return;
         }
-        catch (Exception ex)
+
+        if (user.IsInRole("Sales"))
         {
-            Console.WriteLine($"Error loading dashboard: {ex.Message}");
+            NavigationManager.NavigateTo("/sales-dashboard");
         }
-        finally
+        else if (user.IsInRole("Tech"))
         {
-            _loading = false;
+            NavigationManager.NavigateTo("/tech/dashboard");
+        }
+        else
+        {
+            // Admin or multi-role users go to the portal selection screen
+            NavigationManager.NavigateTo("/portal");
         }
     }
 }

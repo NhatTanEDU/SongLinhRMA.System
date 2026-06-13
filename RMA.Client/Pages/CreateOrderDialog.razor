@@ -1,0 +1,249 @@
+@using RMA.Shared.DTOs
+@using RMA.Client.Services
+@inject CustomerService CustomerService
+@inject ReferenceDataService RefDataService
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+            <MudGrid>
+                <!-- Customer Selection -->
+                <MudItem xs="12" sm="6" Class="d-flex align-center">
+                    <MudSelect T="string" Label="Khách Hàng" @bind-Value="_order.CustomerId" Required="true" RequiredError="Vui lòng chọn khách hàng!" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1">
+                        @foreach (var c in _customers)
+                        {
+                            <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Class="ml-2 mt-4" OnClick="OpenCustomerDialog" title="Thêm Khách Hàng Nhanh" />
+                </MudItem>
+
+                <!-- Sales Note -->
+                <MudItem xs="12" sm="6">
+                    <MudTextField T="string" Label="Ghi chú đơn hàng (SalesNote)" @bind-Value="_order.SalesNote" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+
+                <!-- Details Header -->
+                <MudItem xs="12" Class="d-flex align-center justify-space-between mt-4">
+                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Chi Tiết Đơn Hàng</MudText>
+                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="AddRow" Size="Size.Small" Class="rounded-lg">
+                        Thêm Sản phẩm
+                    </MudButton>
+                </MudItem>
+
+                <!-- Dynamic Rows -->
+                <MudItem xs="12">
+                    @if (!_order.Details.Any())
+                    {
+                        <div class="pa-4 rounded text-center border-dashed" style="border: 1px dashed #ccc; background-color: #fafafa;">
+                            <MudText Typo="Typo.body2" Class="text-secondary">Chưa có sản phẩm nào được chọn. Hãy bấm nút "Thêm Sản phẩm" để bắt đầu.</MudText>
+                        </div>
+                    }
+                    else
+                    {
+                        @for (int i = 0; i < _order.Details.Count; i++)
+                        {
+                            int index = i;
+                            var detail = _order.Details[index];
+                            <MudPaper Class="pa-4 mb-3 rounded-lg position-relative" Elevation="1" Style="border-left: 4px solid #0072BC;">
+                                <MudGrid Class="align-center">
+                                    <!-- Select Model -->
+                                    <MudItem xs="12" sm="3">
+                                        <MudSelect T="string" Label="Thiết bị (Model)" Value="@detail.ModelId" ValueChanged="@((val) => OnModelChanged(val, index))" Required="true" RequiredError="Chọn thiết bị!" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                            @foreach (var m in _models)
+                                            {
+                                                <MudSelectItem Value="@m.Id">@m.ModelName</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </MudItem>
+
+                                    <!-- Specs -->
+                                    <MudItem xs="12" sm="3">
+                                        <MudTextField T="string" Label="Thông số thiết bị (Specs)" @bind-Value="detail.DeviceSpecs" Placeholder="RAM, Chip, SSD..." Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <!-- Quantity -->
+                                    <MudItem xs="6" sm="2">
+                                        <MudNumericField T="int" Label="SL" @bind-Value="detail.Quantity" Min="1" Required="true" RequiredError="Min 1" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <!-- Warranty Months -->
+                                    <MudItem xs="6" sm="2">
+                                        <MudNumericField T="int?" Label="BH (T)" @bind-Value="detail.WarrantyMonths" Min="0" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <!-- Row Note -->
+                                    <MudItem xs="10" sm="2">
+                                        <MudTextField T="string" Label="Ghi chú dòng" @bind-Value="detail.Note" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    </MudItem>
+
+                                    <!-- Remove Action -->
+                                    <MudItem xs="2" sm="1" Class="d-flex justify-end">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" OnClick="@(() => RemoveRow(index))" title="Xóa dòng" />
+                                    </MudItem>
+                                </MudGrid>
+                            </MudPaper>
+                        }
+                    }
+                </MudItem>
+            </MudGrid>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Hủy</MudButton>
+        <MudButton Color="Color.Primary" Variant="Variant.Filled" OnClick="Submit" Disabled="@(!_formIsValid || !_order.Details.Any() || _submitting)" Class="rounded-lg">
+            @if (_submitting)
+            {
+                <MudProgressCircular Class="ms-n1" Size="Size.Small" Color="Color.Default" Indeterminate="true" />
+                <span class="ms-2">Đang lưu đơn...</span>
+            }
+            else
+            {
+                <span>Lưu Đơn Hàng</span>
+            }
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+    [Parameter] public SalesOrderDto? OrderToEdit { get; set; }
+
+    private MudForm _form = null!;
+    private bool _formIsValid;
+    private bool _submitting;
+
+    private SalesOrderCreateDto _order = new()
+    {
+        Details = new List<OrderDetailCreateDto>()
+    };
+
+    private List<CustomerDto> _customers = new();
+    private List<ModelDto> _models = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMetadata();
+        
+        if (OrderToEdit != null)
+        {
+            _order.CustomerId = OrderToEdit.CustomerId;
+            _order.SalesNote = OrderToEdit.SalesNote;
+            _order.Details = OrderToEdit.Details.Select(d => new OrderDetailCreateDto
+            {
+                ModelId = d.ModelId,
+                Quantity = d.Quantity,
+                WarrantyMonths = d.WarrantyMonths,
+                DeviceSpecs = d.DeviceSpecs,
+                Note = d.Note
+            }).ToList();
+        }
+    }
+
+    private async Task LoadMetadata()
+    {
+        try
+        {
+            var customersTask = CustomerService.GetCustomersAsync();
+            var modelsTask = RefDataService.GetModelsAsync();
+            await Task.WhenAll(customersTask, modelsTask);
+
+            _customers = customersTask.Result.OrderBy(c => c.Name).ToList();
+            _models = modelsTask.Result.OrderBy(m => m.ModelName).ToList();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải dữ liệu danh mục: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenCustomerDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<CustomerDialog>("Thêm Khách Hàng Nhanh", options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled && result.Data is CustomerDto newCustomer)
+        {
+            _customers = await CustomerService.GetCustomersAsync();
+            _order.CustomerId = newCustomer.Id;
+            StateHasChanged();
+        }
+    }
+
+    private void AddRow()
+    {
+        _order.Details.Add(new OrderDetailCreateDto
+        {
+            Quantity = 1
+        });
+        StateHasChanged();
+    }
+
+    private void RemoveRow(int index)
+    {
+        if (index >= 0 && index < _order.Details.Count)
+        {
+            _order.Details.RemoveAt(index);
+            StateHasChanged();
+        }
+    }
+
+    private void OnModelChanged(string modelId, int index)
+    {
+        var detail = _order.Details[index];
+        detail.ModelId = modelId;
+        
+        // Auto fill warranty months from model
+        var model = _models.FirstOrDefault(m => m.Id == modelId);
+        if (model != null)
+        {
+            detail.WarrantyMonths = model.WarrantyMonths;
+        }
+        StateHasChanged();
+    }
+
+    private async Task Submit()
+    {
+        await _form.ValidateAsync();
+        if (_formIsValid && _order.Details.Any())
+        {
+            _submitting = true;
+            try
+            {
+                HttpResponseMessage response;
+                if (OrderToEdit == null)
+                {
+                    response = await Http.PostAsJsonAsync("api/salesorders", _order);
+                }
+                else
+                {
+                    response = await Http.PutAsJsonAsync($"api/salesorders/{OrderToEdit.Id}", _order);
+                }
+
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add(OrderToEdit == null ? "Lên đơn hàng thành công!" : "Cập nhật đơn hàng thành công!", Severity.Success);
+                    MudDialog.Close(DialogResult.Ok(true));
+                }
+                else
+                {
+                    var err = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Lỗi lưu đơn hàng: {err}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi kết nối máy chủ: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _submitting = false;
+            }
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

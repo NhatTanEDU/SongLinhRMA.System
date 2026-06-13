@@ -15,10 +15,20 @@ namespace RMA.Client.Auth
 
         public void MarkUserAsAuthenticated(string username)
         {
+            var role = "Admin";
+            if (username.StartsWith("sales", StringComparison.OrdinalIgnoreCase))
+            {
+                role = "Sales";
+            }
+            else if (username.StartsWith("tech", StringComparison.OrdinalIgnoreCase))
+            {
+                role = "Tech";
+            }
+
             var identity = new ClaimsIdentity(new[]
             {
                 new Claim(ClaimTypes.Name, username),
-                new Claim(ClaimTypes.Role, "Admin")
+                new Claim(ClaimTypes.Role, role)
             }, "MockAuthenticationType");
 
             _currentUser = new ClaimsPrincipal(identity);

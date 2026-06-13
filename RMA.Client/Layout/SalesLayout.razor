@@ -1,0 +1,80 @@
+@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<MudThemeProvider Theme="@_salesTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Color="Color.Primary" Style="background-color: #0072BC;">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudText Typo="Typo.h5" Class="ml-3 fw-bold">SOLICOM SALES PORTAL</MudText>
+        <MudSpacer />
+        
+        <AuthorizeView>
+            <Authorized>
+                <MudText Typo="Typo.body1" Class="mr-4">Sales: @context.User.Identity?.Name</MudText>
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" OnClick="Logout" Style="border-color: white;">Đăng xuất</MudButton>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" ClipMode="DrawerClipMode.Always">
+        <div class="pa-4 d-flex flex-column align-center" style="border-bottom: 1px solid #e0e0e0;">
+            <svg width="50" height="50" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50,50 L50,0 A50,50 0 0,0 0,50 Z" fill="#E51D24" />
+                <path d="M50,50 L100,50 A50,50 0 0,0 50,0 Z" fill="#FFF200" />
+                <path d="M50,50 L0,50 A50,50 0 0,0 50,100 Z" fill="#FFF200" />
+                <path d="M50,50 L50,100 A50,50 0 0,0 100,50 Z" fill="#E51D24" />
+                <circle cx="50" cy="50" r="32" fill="#0072BC" stroke="#FFFFFF" stroke-width="2" />
+                <text x="50" y="55" font-family="'Arial Black', Impact, sans-serif" font-weight="900" font-size="14" fill="#E51D24" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" letter-spacing="1">SOLICOM</text>
+            </svg>
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mt-2" Color="Color.Primary">PHÒNG KINH DOANH</MudText>
+        </div>
+        <MudNavMenu>
+            <MudNavLink Href="/sales-dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard">Bảng điều khiển</MudNavLink>
+            <MudNavLink Href="/sales/customers" Icon="@Icons.Material.Filled.People">Khách hàng</MudNavLink>
+            <MudNavLink Href="/sales/devices" Icon="@Icons.Material.Filled.Devices">Thiết bị bán ra</MudNavLink>
+            <MudDivider Class="my-2" />
+            <MudNavLink Href="/portal" Icon="@Icons.Material.Filled.SwapHoriz" Style="color: #E51D24;">Đổi phòng ban</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="bg-light">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4 pb-8">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+
+    private MudTheme _salesTheme = new MudTheme()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#0072BC", // SOLICOM Blue
+            Secondary = "#E51D24", // SOLICOM Red
+            Warning = "#FFF200", // SOLICOM Yellow
+            AppbarBackground = "#0072BC",
+            Background = "#f4f6f8"
+        }
+    };
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void Logout()
+    {
+        if (AuthStateProvider is MockAuthStateProvider mockProvider)
+        {
+            mockProvider.MarkUserAsLoggedOut();
+            NavigationManager.NavigateTo("/login");
+        }
+    }
+}

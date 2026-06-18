@@ -6,10 +6,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace RMA.Server.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class DevicesController : ControllerBase
 {
     private readonly FirestoreRepository<Device> _deviceRepo;
@@ -101,6 +104,7 @@ public class DevicesController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Tech")]
     public async Task<ActionResult<DeviceDto>> Post([FromBody] DeviceCreateDto dto)
     {
         var entity = new Device
@@ -118,6 +122,7 @@ public class DevicesController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,Tech")]
     public async Task<IActionResult> Put(string id, [FromBody] DeviceCreateDto dto)
     {
         var entity = await _deviceRepo.GetByIdAsync(id);
@@ -134,6 +139,7 @@ public class DevicesController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin,Tech")]
     public async Task<IActionResult> Delete(string id)
     {
         await _deviceRepo.DeleteAsync(id);

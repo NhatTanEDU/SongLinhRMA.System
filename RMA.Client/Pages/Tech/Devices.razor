@@ -1,7 +1,19 @@
 @page "/tech/devices"
 @layout TechLayout
+@inject AuthenticationStateProvider AuthStateProvider
 
 <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-8">
     <MudText Typo="Typo.h4" Class="fw-bold mb-6" Style="color: #E51D24;">TRA CỨU THIẾT BỊ & THÔNG TIN BẢO HÀNH</MudText>
-    <RMA.Client.Components.SharedGrids.DeviceGrid />
+    <RMA.Client.Components.SharedGrids.DeviceGrid ReadOnly="@_isSales" />
 </MudContainer>
+
+@code {
+    private bool _isSales = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isSales = user.IsInRole("Sales");
+    }
+}

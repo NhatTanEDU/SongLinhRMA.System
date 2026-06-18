@@ -51,13 +51,16 @@
                             <MudPaper Class="pa-4 mb-3 rounded-lg position-relative" Elevation="1" Style="border-left: 4px solid #0072BC;">
                                 <MudGrid Class="align-center">
                                     <!-- Select Model -->
-                                    <MudItem xs="12" sm="3">
-                                        <MudSelect T="string" Label="Thiết bị (Model)" Value="@detail.ModelId" ValueChanged="@((val) => OnModelChanged(val, index))" Required="true" RequiredError="Chọn thiết bị!" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                    <MudItem xs="12" sm="3" Class="d-flex align-end gap-1">
+                                        <MudSelect T="string" Label="Thiết bị (Model)" Value="@detail.ModelId" ValueChanged="@((val) => OnModelChanged(val, index))" Required="true" RequiredError="Chọn thiết bị!" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1">
                                             @foreach (var m in _models)
                                             {
                                                 <MudSelectItem Value="@m.Id">@m.ModelName</MudSelectItem>
                                             }
                                         </MudSelect>
+                                        <MudTooltip Text="Thêm nhanh Thiết bị">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="@(() => OpenAddModelDialog(index))" Style="margin-bottom: 2px;" Size="Size.Small" />
+                                        </MudTooltip>
                                     </MudItem>
 
                                     <!-- Specs -->
@@ -170,6 +173,30 @@
             _customers = await CustomerService.GetCustomersAsync();
             _order.CustomerId = newCustomer.Id;
             StateHasChanged();
+        }
+    }
+
+    private async Task OpenAddModelDialog(int index)
+    {
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var param = new DialogParameters { ["Model"] = new ModelDto() };
+        var dialog = await DialogService.ShowAsync<ModelDialog>("Thêm Model Thiết Bị Mới", param, opts);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ModelDto modelDto })
+        {
+            var added = await RefDataService.CreateModelAsync(modelDto);
+            if (added != null)
+            {
+                Snackbar.Add($"✅ Đã thêm Model: {added.ModelName} ({added.Brand})", Severity.Success);
+                _models = (await RefDataService.GetModelsAsync()).OrderBy(m => m.ModelName).ToList();
+
+                OnModelChanged(added.Id, index);
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Thêm Model thất bại!", Severity.Error);
+            }
         }
     }
 

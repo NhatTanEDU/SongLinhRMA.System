@@ -7,7 +7,10 @@
     <ToolBarContent>
         <MudText Typo="Typo.h6" Class="fw-bold">Danh sách Khách hàng</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddCustomerDialog" Class="mr-3 rounded-lg">Thêm Mới</MudButton>
+        @if (!ReadOnly)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddCustomerDialog" Class="mr-3 rounded-lg">Thêm Mới</MudButton>
+        }
         <MudTextField @bind-Value="searchString" Placeholder="Tìm kiếm..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined"></MudTextField>
     </ToolBarContent>
     <HeaderContent>
@@ -18,7 +21,10 @@
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Email</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Số điện thoại</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Địa chỉ</MudText></MudTh>
-        <MudTh Style="text-align:center;"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
+        @if (!ReadOnly)
+        {
+            <MudTh Style="text-align:center;"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
+        }
     </HeaderContent>
     <RowTemplate>
         <MudTd DataLabel="STT">@(customers.IndexOf(context) + 1)</MudTd>
@@ -53,14 +59,17 @@
         <MudTd DataLabel="Email">@context.Email</MudTd>
         <MudTd DataLabel="Số điện thoại">@context.Phone</MudTd>
         <MudTd DataLabel="Địa chỉ">@context.Address</MudTd>
-        <MudTd DataLabel="Thao tác" Style="text-align:center;">
-            <MudTooltip Text="Chỉnh sửa">
-                <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" OnClick="@(() => OpenEditCustomerDialog(context))" />
-            </MudTooltip>
-            <MudTooltip Text="Xóa">
-                <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteCustomer(context))" />
-            </MudTooltip>
-        </MudTd>
+        @if (!ReadOnly)
+        {
+            <MudTd DataLabel="Thao tác" Style="text-align:center;">
+                <MudTooltip Text="Chỉnh sửa">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Info" Size="Size.Small" OnClick="@(() => OpenEditCustomerDialog(context))" />
+                </MudTooltip>
+                <MudTooltip Text="Xóa">
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Color="Color.Error" Size="Size.Small" OnClick="@(() => DeleteCustomer(context))" />
+                </MudTooltip>
+            </MudTd>
+        }
     </RowTemplate>
     <PagerContent>
         <MudTablePager InfoFormat="{first_item}-{last_item} trong {all_items}" RowsPerPageString="Số dòng mỗi trang:" />
@@ -68,6 +77,8 @@
 </MudTable>
 
 @code {
+    [Parameter] public bool ReadOnly { get; set; } = false;
+
     private List<CustomerDto> customers = new List<CustomerDto>();
     private string searchString = "";
     private CustomerDto? selectedItem = null;

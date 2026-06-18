@@ -4,6 +4,7 @@
 @inject RMA.Client.Services.ReferenceDataService ReferenceService
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject AuthenticationStateProvider AuthStateProvider
 
 <MudText Typo="Typo.h3" GutterBottom="true">Brands (Vendors)</MudText>
 
@@ -11,7 +12,10 @@
     <ToolBarContent>
         <MudText Typo="Typo.h6">Brand List</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddBrandDialog">Thêm Hãng</MudButton>
+        @if (!_isSales)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddBrandDialog">Thêm Hãng</MudButton>
+        }
         <MudSpacer />
         <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
     </ToolBarContent>
@@ -29,11 +33,16 @@
 </MudTable>
 
 @code {
+    private bool _isSales = false;
     private List<VendorDto> vendors = new List<VendorDto>();
     private string searchString = "";
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isSales = user.IsInRole("Sales");
+
         await LoadData();
     }
 

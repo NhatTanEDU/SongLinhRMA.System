@@ -4,6 +4,8 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
+@inject RMA.Client.Services.ReferenceDataService ReferenceService
 
 <MudText Typo="Typo.h4" Class="mb-4">Tạo Đơn Hàng Bán</MudText>
 
@@ -24,13 +26,16 @@
     @foreach (var detail in createDto.Details)
     {
         <MudGrid Class="align-center mb-2">
-            <MudItem xs="12" md="4">
-                <MudSelect T="string" Label="Sản phẩm (Model)" @bind-Value="detail.ModelId" Required="true">
+            <MudItem xs="12" md="4" Class="d-flex align-end gap-1">
+                <MudSelect T="string" Label="Sản phẩm (Model)" @bind-Value="detail.ModelId" Required="true" Class="flex-grow-1">
                     @foreach (var m in models)
                     {
                         <MudSelectItem Value="@m.Id">@m.ModelName (Kho: @m.StockQuantity)</MudSelectItem>
                     }
                 </MudSelect>
+                <MudTooltip Text="Thêm nhanh Thiết bị">
+                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="@(() => OpenAddModelDialog(detail))" Style="margin-bottom: 4px;" />
+                </MudTooltip>
             </MudItem>
             <MudItem xs="12" md="2">
                 <MudNumericField @bind-Value="detail.Quantity" Label="Số lượng" Min="1" />
@@ -68,6 +73,31 @@
     private void AddDetail()
     {
         createDto.Details.Add(new OrderDetailCreateDto { Quantity = 1 });
+    }
+
+    private async Task OpenAddModelDialog(OrderDetailCreateDto detail)
+    {
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var param = new DialogParameters { ["Model"] = new ModelDto() };
+        var dialog = await DialogService.ShowAsync<ModelDialog>("Thêm Model Thiết Bị Mới", param, opts);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: ModelDto modelDto })
+        {
+            var added = await ReferenceService.CreateModelAsync(modelDto);
+            if (added != null)
+            {
+                Snackbar.Add($"✅ Đã thêm Model: {added.ModelName} ({added.Brand})", Severity.Success);
+                var modResp = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models");
+                if (modResp != null) models = modResp;
+
+                detail.ModelId = added.Id;
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Thêm Model thất bại!", Severity.Error);
+            }
+        }
     }
 
     private async Task SaveOrder()

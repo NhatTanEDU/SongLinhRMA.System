@@ -1,9 +1,11 @@
 @page "/tickets/create"
 @using RMA.Shared.DTOs
 @using System.Net.Http.Json
+@using Microsoft.AspNetCore.Components.Authorization
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
 
 <MudText Typo="Typo.h4" Class="mb-4">Tạo Phiếu RMA Mới</MudText>
 
@@ -65,6 +67,15 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.IsInRole("Sales"))
+        {
+            Snackbar.Add("Bạn không có quyền tạo ticket kỹ thuật.", Severity.Warning);
+            Navigation.NavigateTo("/tickets");
+            return;
+        }
+
         await LoadCustomers();
     }
 

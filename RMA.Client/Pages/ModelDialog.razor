@@ -1,6 +1,7 @@
 @using RMA.Shared.DTOs
 @inject RMA.Client.Services.ReferenceDataService ReferenceService
 @inject ISnackbar Snackbar
+@inject IDialogService DialogService
 
 <MudDialog>
     <TitleContent>
@@ -32,17 +33,21 @@
                                   AdornmentIcon="@Icons.Material.Filled.Copyright" />
                 </MudItem>
 
-                <MudItem xs="12" sm="6">
+                <MudItem xs="12" sm="6" Class="d-flex align-end gap-1">
                     <MudSelect T="string" Label="Loại thiết bị (Category) *"
                                @bind-Value="Model.CategoryId"
                                Required="true" RequiredError="Vui lòng chọn loại thiết bị!"
                                Variant="Variant.Outlined"
-                               AnchorOrigin="Origin.BottomCenter">
+                               AnchorOrigin="Origin.BottomCenter"
+                               Class="flex-grow-1">
                         @foreach (var cat in categories)
                         {
                             <MudSelectItem Value="@cat.Id">@cat.Name</MudSelectItem>
                         }
                     </MudSelect>
+                    <MudTooltip Text="Thêm nhanh Loại thiết bị">
+                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" OnClick="OpenAddCategoryDialog" Style="margin-bottom: 4px;" />
+                    </MudTooltip>
                 </MudItem>
             </MudGrid>
         </MudForm>
@@ -79,6 +84,28 @@
         catch (Exception ex)
         {
             Snackbar.Add($"Lỗi tải danh sách loại thiết bị: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddCategoryDialog()
+    {
+        var opts = new DialogOptions { MaxWidth = MaxWidth.Small, FullWidth = true, CloseOnEscapeKey = true };
+        var dialog = await DialogService.ShowAsync<CategoryDialog>("Thêm Loại Thiết Bị Mới", opts);
+        var result = await dialog.Result;
+        if (result is { Canceled: false, Data: CategoryDto categoryDto })
+        {
+            var added = await ReferenceService.CreateCategoryAsync(categoryDto);
+            if (added != null)
+            {
+                Snackbar.Add($"✅ Đã thêm Loại thiết bị: {added.Name}", Severity.Success);
+                categories = await ReferenceService.GetCategoriesAsync();
+                Model.CategoryId = added.Id;
+                StateHasChanged();
+            }
+            else
+            {
+                Snackbar.Add("Thêm Loại thiết bị thất bại!", Severity.Error);
+            }
         }
     }
 

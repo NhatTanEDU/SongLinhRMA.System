@@ -8,10 +8,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace RMA.Server.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
+[Authorize]
 public class RmaTicketsController : ControllerBase
 {
     private readonly FirestoreRepository<RmaTicket> _ticketRepo;
@@ -438,6 +441,7 @@ public class RmaTicketsController : ControllerBase
     }
 
     [HttpPost]
+    [Authorize(Roles = "Admin,Tech")]
     public async Task<ActionResult<RmaTicketDto>> Post([FromBody] RmaTicketCreateDto dto)
     {
         var entity = new RmaTicket
@@ -485,6 +489,7 @@ public class RmaTicketsController : ControllerBase
     }
 
     [HttpPut("{id}")]
+    [Authorize(Roles = "Admin,Tech")]
     public async Task<IActionResult> Put(string id, [FromBody] RmaTicketCreateDto dto)
     {
         var entity = await _ticketRepo.GetByIdAsync(id);
@@ -632,6 +637,7 @@ public class RmaTicketsController : ControllerBase
     }
 
     [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin,Tech")]
     public async Task<IActionResult> Delete(string id)
     {
         await _ticketRepo.DeleteAsync(id);

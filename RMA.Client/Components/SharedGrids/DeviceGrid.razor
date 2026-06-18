@@ -7,7 +7,10 @@
     <ToolBarContent>
         <MudText Typo="Typo.h6">Device List</MudText>
         <MudSpacer />
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddDeviceDialog">Thêm Thiết Bị</MudButton>
+        @if (!ReadOnly)
+        {
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddDeviceDialog">Thêm Thiết Bị</MudButton>
+        }
         <MudSpacer />
         <MudTextField @bind-Value="searchString" Placeholder="Search" Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0"></MudTextField>
     </ToolBarContent>
@@ -31,6 +34,8 @@
 </MudTable>
 
 @code {
+    [Parameter] public bool ReadOnly { get; set; } = false;
+
     private List<DeviceDto> devices = new List<DeviceDto>();
     private string searchString = "";
     private DeviceDto? selectedItem = null;

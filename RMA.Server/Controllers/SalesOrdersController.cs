@@ -10,10 +10,13 @@ using Google.Cloud.Firestore;
 using Microsoft.AspNetCore.SignalR;
 using RMA.Server.Hubs;
 
+using Microsoft.AspNetCore.Authorization;
+
 namespace RMA.Server.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class SalesOrdersController : ControllerBase
     {
         private readonly FirestoreRepository<SalesOrder> _orderRepo;
@@ -203,6 +206,7 @@ namespace RMA.Server.Controllers
         }
 
         [HttpPut("{id}/status")]
+        [Authorize(Roles = "Admin,Tech")]
         public async Task<IActionResult> UpdateStatus(string id, [FromBody] string status)
         {
             try
@@ -222,6 +226,7 @@ namespace RMA.Server.Controllers
         }
 
         [HttpPost("confirm-delivery")]
+        [Authorize(Roles = "Admin,Tech")]
         public async Task<IActionResult> ConfirmDelivery([FromBody] ConfirmDeliveryDto dto)
         {
             if (dto == null || string.IsNullOrEmpty(dto.OrderId))

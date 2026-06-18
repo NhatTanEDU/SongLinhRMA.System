@@ -1,0 +1,33 @@
+@using RMA.Shared.DTOs
+
+<MudDialog>
+    <DialogContent>
+        <MudForm @ref="form" @bind-IsValid="@success">
+            <MudTextField @bind-Value="Category.Name" Label="Tên loại thiết bị (Category) *" Required="true" RequiredError="Tên loại thiết bị là bắt buộc!" Placeholder="VD: Laptop, PC, UPS, Máy in..." AutoFocus="true" />
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Hủy</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Submit" Disabled="@(!success)">Lưu</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    public CategoryDto Category { get; set; } = new CategoryDto();
+
+    bool success;
+    MudForm form = null!;
+
+    async Task Submit()
+    {
+        await form.ValidateAsync();
+        if (form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(Category));
+        }
+    }
+
+    void Cancel() => MudDialog.Cancel();
+}

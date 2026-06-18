@@ -1,3 +1,4 @@
+@using Microsoft.AspNetCore.Components.Authorization
 @using RMA.Shared.DTOs
 @using RMA.Client.Services
 @inject IRmaTicketService TicketService
@@ -6,6 +7,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
+@inject AuthenticationStateProvider AuthStateProvider
 
 <MudDialog>
     <TitleContent>
@@ -26,7 +28,7 @@
                             <MudText Typo="Typo.subtitle1" Color="Color.Primary"><b>1. Thông Tin Thiết Bị & Định Danh</b></MudText>
                         </CardHeaderContent>
                         <CardHeaderActions>
-                            @if (!isEditing)
+                            @if (!isEditing && !_isSales)
                             {
                                 <MudTooltip Text="Chỉnh sửa nhanh thông tin thiết bị">
                                     <MudIconButton Icon="@Icons.Material.Filled.Edit" Color="Color.Primary" OnClick="StartEditing" Size="Size.Small" />
@@ -446,9 +448,14 @@
     private RmaTicketDto _ticketBackup = new();
     private bool isApcDevice = false;
     private DateTime? _apcExpiryDate;
+    private bool _isSales = false;
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isSales = user.IsInRole("Sales");
+
         _statuses = await TicketService.GetStatusesAsync();
         
         try

@@ -5,6 +5,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager NavigationManager
+@inject AuthenticationStateProvider AuthStateProvider
 @implements IAsyncDisposable
 
 <PageTitle>Danh Sách Chờ Giao Hàng - Kỹ Thuật</PageTitle>
@@ -61,26 +62,29 @@
                             }
                         </div>
 
-                        <div class="mt-4">
-                            <div class="d-flex gap-2 w-100">
-                                @if (order.Status == "Pending")
-                                {
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Delivering"))" Class="flex-grow-1 rounded-lg">
-                                        Bắt đầu giao
+                        @if (!_isSales)
+                        {
+                            <div class="mt-4">
+                                <div class="d-flex gap-2 w-100">
+                                    @if (order.Status == "Pending")
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.DirectionsCar" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Delivering"))" Class="flex-grow-1 rounded-lg">
+                                            Bắt đầu giao
+                                        </MudButton>
+                                    }
+                                    else if (order.Status == "Delivering")
+                                    {
+                                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Pending"))" Class="flex-grow-1 rounded-lg">
+                                            Hoàn về kho
+                                        </MudButton>
+                                    }
+                                    
+                                    <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Small" OnClick="@(() => OpenConfirmDeliveryDialog(order))" Class="flex-grow-1 rounded-lg" Style="background-color: #E51D24;">
+                                        Quét S/N &amp; Giao
                                     </MudButton>
-                                }
-                                else if (order.Status == "Delivering")
-                                {
-                                    <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Pending"))" Class="flex-grow-1 rounded-lg">
-                                        Hoàn về kho
-                                    </MudButton>
-                                }
-                                
-                                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Small" OnClick="@(() => OpenConfirmDeliveryDialog(order))" Class="flex-grow-1 rounded-lg" Style="background-color: #E51D24;">
-                                    Quét S/N &amp; Giao
-                                </MudButton>
+                                </div>
                             </div>
-                        </div>
+                        }
                     </MudPaper>
                 </MudItem>
             }
@@ -89,6 +93,7 @@
 </MudContainer>
 
 @code {
+    private bool _isSales = false;
     private List<SalesOrderDto> _orders = new();
     private bool _loading = true;
     private bool _isLoadingOrders = false;
@@ -98,6 +103,10 @@
 
     protected override async Task OnInitializedAsync()
     {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        _isSales = user.IsInRole("Sales");
+
         await LoadOrders();
 
         _hubConnection = new HubConnectionBuilder()

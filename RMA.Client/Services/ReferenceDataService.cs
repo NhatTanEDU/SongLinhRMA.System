@@ -60,4 +60,14 @@ public class ReferenceDataService
         }
         return null;
     }
+
+    public async Task<CategoryDto?> CreateCategoryAsync(CategoryDto category)
+    {
+        var response = await _http.PostAsJsonAsync("api/referencedata/categories", category);
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<CategoryDto>();
+        }
+        return null;
+    }
 }

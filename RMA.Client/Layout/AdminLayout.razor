@@ -1,0 +1,116 @@
+@inherits LayoutComponentBase
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager NavigationManager
+
+<MudThemeProvider Theme="@_adminTheme" />
+<MudDialogProvider />
+<MudSnackbarProvider />
+<MudPopoverProvider />
+
+<MudLayout>
+    <!-- AppBar with Admin Theme (Deep Slate Color) -->
+    <MudAppBar Elevation="2" Style="background-color: #2C3E50; color: #ffffff;">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start" OnClick="@((e) => DrawerToggle())" />
+        <MudText Typo="Typo.h5" Class="ml-3 fw-bold">SOLICOM SYSTEM ADMIN</MudText>
+        <MudSpacer />
+        
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <div class="d-flex align-center gap-2 mr-4">
+                    <MudAvatar Color="Color.Secondary" Size="Size.Small" Variant="Variant.Filled">A</MudAvatar>
+                    <MudText Typo="Typo.body2">Admin: @context.User.Identity?.Name</MudText>
+                </div>
+                <MudButton Variant="Variant.Outlined" Color="Color.Inherit" OnClick="Logout" Style="border-color: #008080; color: #ffffff;">Đăng xuất</MudButton>
+            </Authorized>
+            <NotAuthorized>
+                <MudText Typo="Typo.body2" Class="text-danger mr-4">Không có quyền truy cập Admin</MudText>
+                <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="RedirectToPortal">Rời khỏi</MudButton>
+            </NotAuthorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <!-- Drawer Sidebar with Collapsible Categories -->
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="3" ClipMode="DrawerClipMode.Always" Width="260px" Style="background-color: #ffffff;">
+        <div class="pa-4 d-flex flex-column align-center" style="border-bottom: 1px solid #e0e0e0; background-color: #f8f9fa;">
+            <svg width="55" height="55" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <path d="M50,50 L50,0 A50,50 0 0,0 0,50 Z" fill="#2C3E50" />
+                <path d="M50,50 L100,50 A50,50 0 0,0 50,0 Z" fill="#008080" />
+                <path d="M50,50 L0,50 A50,50 0 0,0 50,100 Z" fill="#008080" />
+                <path d="M50,50 L50,100 A50,50 0 0,0 100,50 Z" fill="#2C3E50" />
+                <circle cx="50" cy="50" r="32" fill="#2c3e50" stroke="#FFFFFF" stroke-width="2" />
+                <text x="50" y="55" font-family="'Arial Black', Impact, sans-serif" font-weight="900" font-size="14" fill="#008080" text-anchor="middle" stroke="#FFFFFF" stroke-width="0.5" letter-spacing="1">ADMIN</text>
+            </svg>
+            <MudText Typo="Typo.subtitle2" Class="fw-bold mt-2 text-dark" Style="color: #2C3E50; letter-spacing: 1.5px;">BỘ NÃO HỆ THỐNG</MudText>
+        </div>
+        
+        <MudNavMenu Class="pa-2">
+            <MudText Typo="Typo.caption" Class="px-3 py-2 text-secondary fw-bold" Style="font-size: 0.75rem; letter-spacing: 1px;">TỔNG QUAN</MudText>
+            <MudNavLink Href="/admin/dashboard" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard" IconColor="Color.Info">Bảng điều khiển</MudNavLink>
+            
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.caption" Class="px-3 py-2 text-secondary fw-bold" Style="font-size: 0.75rem; letter-spacing: 1px;">NGHIỆP VỤ</MudText>
+            
+            <MudNavGroup Title="Quản Lý Nghiệp Vụ" Icon="@Icons.Material.Filled.BusinessCenter" IconColor="Color.Default" Expanded="true">
+                <MudNavLink Href="/admin/sales" Icon="@Icons.Material.Filled.ShoppingCart" IconColor="Color.Warning">Đơn hàng & Giao nhận</MudNavLink>
+                <MudNavLink Href="/admin/rma" Icon="@Icons.Material.Filled.Build" IconColor="Color.Error">Giám sát bảo hành</MudNavLink>
+                <MudNavLink Href="/admin/catalog" Icon="@Icons.Material.Filled.Inventory" IconColor="Color.Success">Danh mục & Tồn kho</MudNavLink>
+            </MudNavGroup>
+            
+            <MudDivider Class="my-2" />
+            <MudText Typo="Typo.caption" Class="px-3 py-2 text-secondary fw-bold" Style="font-size: 0.75rem; letter-spacing: 1px;">HỆ THỐNG</MudText>
+            
+            <MudNavGroup Title="Cấu Hình Core" Icon="@Icons.Material.Filled.Settings" IconColor="Color.Default" Expanded="true">
+                <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People" IconColor="Color.Primary">Quản trị người dùng</MudNavLink>
+                <MudNavLink Href="/admin/settings" Icon="@Icons.Material.Filled.Tune" IconColor="Color.Secondary">Cấu hình & Logs</MudNavLink>
+            </MudNavGroup>
+
+            <MudDivider Class="my-4" />
+            <MudNavLink Href="/portal" Icon="@Icons.Material.Filled.SwapHoriz" Style="color: #008080; font-weight: bold;">Đổi phân hệ làm việc</MudNavLink>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="bg-light">
+        <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pt-4 pb-8">
+            @Body
+        </MudContainer>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    bool _drawerOpen = true;
+
+    // Theme configured with Deep Slate (#2C3E50) and Teal (#008080)
+    private MudTheme _adminTheme = new MudTheme()
+    {
+        PaletteLight = new PaletteLight()
+        {
+            Primary = "#2C3E50",     // Deep Slate
+            Secondary = "#008080",   // Teal
+            Success = "#2e7d32",
+            Info = "#008080",        // Accents are Teal
+            Warning = "#ef6c00",
+            Error = "#c62828",
+            AppbarBackground = "#2C3E50",
+            Background = "#f4f6f8"
+        }
+    };
+
+    void DrawerToggle()
+    {
+        _drawerOpen = !_drawerOpen;
+    }
+
+    private void Logout()
+    {
+        if (AuthStateProvider is MockAuthStateProvider mockProvider)
+        {
+            mockProvider.MarkUserAsLoggedOut();
+            NavigationManager.NavigateTo("/login");
+        }
+    }
+
+    private void RedirectToPortal()
+    {
+        NavigationManager.NavigateTo("/portal");
+    }
+}

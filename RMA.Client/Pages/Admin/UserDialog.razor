@@ -1,0 +1,97 @@
+@using RMA.Shared.DTOs
+@using System.Text.RegularExpressions
+
+<MudDialog Class="rounded-xl pa-4">
+    <DialogContent>
+        <MudForm @ref="_form" @bind-IsValid="@_success">
+            <!-- Tên Đăng Nhập -->
+            <MudTextField @bind-Value="User.Username"
+                          Label="Tên Đăng Nhập (Username)"
+                          Required="true"
+                          RequiredError="Tên đăng nhập là bắt buộc!"
+                          Disabled="IsEdit"
+                          Variant="Variant.Outlined"
+                          Class="mb-4" />
+
+            <!-- Mật khẩu -->
+            <MudTextField @bind-Value="User.Password"
+                          Label="@(IsEdit ? "Mật Khẩu Mới (Bỏ trống nếu không đổi)" : "Mật Khẩu (Bắt buộc)")"
+                          Required="@(!IsEdit)"
+                          RequiredError="Mật khẩu là bắt buộc khi tạo tài khoản mới!"
+                          InputType="InputType.Password"
+                          Variant="Variant.Outlined"
+                          Class="mb-4" />
+
+            <!-- Email -->
+            <MudTextField @bind-Value="User.Email"
+                          Label="Địa Chỉ Email"
+                          Required="true"
+                          RequiredError="Email là bắt buộc!"
+                          Validation="@(new Func<string, string?>(ValidateEmail))"
+                          Variant="Variant.Outlined"
+                          Class="mb-4" />
+
+            <!-- Số điện thoại -->
+            <MudTextField @bind-Value="User.Phone"
+                          Label="Số Điện Thoại"
+                          Variant="Variant.Outlined"
+                          Class="mb-4" />
+
+            <!-- dropdown Vai Trò / Phân Quyền -->
+            <MudSelect @bind-Value="User.Role" 
+                       Label="Vai Trò / Phân Quyền" 
+                       Required="true"
+                       RequiredError="Vai trò là bắt buộc!"
+                       Variant="Variant.Outlined"
+                       Class="mb-4">
+                <MudSelectItem Value='@("Sales")'>Phòng Kinh Doanh (Sales)</MudSelectItem>
+                <MudSelectItem Value='@("Tech")'>Phòng Kỹ Thuật (Tech)</MudSelectItem>
+            </MudSelect>
+
+            <!-- dropdown Trạng Thái -->
+            <MudSelect @bind-Value="User.Status" 
+                       Label="Trạng Thái Hoạt Động" 
+                       Required="true"
+                       Variant="Variant.Outlined"
+                       Class="mb-2">
+                <MudSelectItem Value='@("Active")'>Kích hoạt (Active)</MudSelectItem>
+                <MudSelectItem Value='@("Inactive")'>Vô hiệu hóa (Inactive)</MudSelectItem>
+            </MudSelect>
+        </MudForm>
+    </DialogContent>
+    <DialogActions>
+        <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="Cancel" Class="rounded-lg mr-2">Hủy bỏ</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Submit" Disabled="@(!_success)" Class="rounded-lg px-6">
+            Lưu Tài Khoản
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
+
+    [Parameter] public SystemUserDto User { get; set; } = new SystemUserDto { Status = "Active", Role = "Tech" };
+    [Parameter] public bool IsEdit { get; set; } = false;
+
+    private bool _success;
+    private MudForm _form = null!;
+
+    private string? ValidateEmail(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email)) return "Email là bắt buộc!";
+        var regex = new Regex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$");
+        if (!regex.IsMatch(email)) return "Định dạng email không hợp lệ!";
+        return null;
+    }
+
+    private async Task Submit()
+    {
+        await _form.ValidateAsync();
+        if (_form.IsValid)
+        {
+            MudDialog.Close(DialogResult.Ok(User));
+        }
+    }
+
+    private void Cancel() => MudDialog.Cancel();
+}

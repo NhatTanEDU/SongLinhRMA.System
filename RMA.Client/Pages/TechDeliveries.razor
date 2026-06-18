@@ -77,7 +77,7 @@
                                 }
                                 
                                 <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.QrCodeScanner" Size="Size.Small" OnClick="@(() => OpenConfirmDeliveryDialog(order))" Class="flex-grow-1 rounded-lg" Style="background-color: #E51D24;">
-                                    Quét S/N & Giao
+                                    Quét S/N &amp; Giao
                                 </MudButton>
                             </div>
                         </div>
@@ -91,7 +91,10 @@
 @code {
     private List<SalesOrderDto> _orders = new();
     private bool _loading = true;
+    private bool _isLoadingOrders = false;
+    private bool _pendingRefresh = false;
     private HubConnection? _hubConnection;
+    private readonly HashSet<string> _confirmedDeliveredIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,12 +116,44 @@
         await _hubConnection.StartAsync();
     }
 
+    /// <summary>
+    /// Load đơn hàng từ server với Pending Refresh Pattern:
+    /// Nếu đang load và nhận thêm request → đặt flag retry thay vì bỏ qua.
+    /// Khi load xong → tự load lại nếu có pending request.
+    /// </summary>
     private async Task LoadOrders()
     {
+        if (_isLoadingOrders)
+        {
+            _pendingRefresh = true;
+            return;
+        }
+
+        _isLoadingOrders = true;
+        _pendingRefresh = false;
+
         try
         {
-            var all = await Http.GetFromJsonAsync<List<SalesOrderDto>>("api/salesorders") ?? new List<SalesOrderDto>();
-            _orders = all.Where(o => o.Status == "Pending" || o.Status == "Delivering").OrderBy(o => o.OrderDate).ToList();
+            var request = new HttpRequestMessage(HttpMethod.Get, "api/salesorders");
+            request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+                MustRevalidate = true
+            };
+            var response = await Http.SendAsync(request);
+            var all = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new List<SalesOrderDto>();
+            
+            // Dọn dẹp các đơn hàng đã được server xác nhận là đã giao
+            var confirmedDelivered = all.Where(o => o.Status == "Delivered" && _confirmedDeliveredIds.Contains(o.Id)).Select(o => o.Id).ToList();
+            foreach (var id in confirmedDelivered)
+            {
+                _confirmedDeliveredIds.Remove(id);
+            }
+
+            _orders = all.Where(o => (o.Status == "Pending" || o.Status == "Delivering") && !_confirmedDeliveredIds.Contains(o.Id))
+                         .OrderBy(o => o.OrderDate)
+                         .ToList();
         }
         catch (Exception ex)
         {
@@ -127,11 +162,17 @@
         finally
         {
             _loading = false;
-            StateHasChanged();
+            _isLoadingOrders = false;
+            await InvokeAsync(StateHasChanged);
+
+            // Nếu có SignalR event mới đến trong khi đang load → load lại
+            if (_pendingRefresh)
+            {
+                _pendingRefresh = false;
+                await LoadOrders();
+            }
         }
     }
-
-
 
     private async Task UpdateStatus(SalesOrderDto order, string newStatus)
     {
@@ -160,8 +201,16 @@
         var parameters = new DialogParameters { ["Order"] = order };
         var dialog = await DialogService.ShowAsync<DeliveryConfirmDialog>("Xác Nhận Giao Hàng & Kích Hoạt Bảo Hành", parameters, options);
         var result = await dialog.Result;
+
         if (result != null && !result.Canceled)
         {
+            // ✅ OPTIMISTIC UPDATE: Đưa vào danh sách tombstone và xóa đơn khỏi danh sách hiển thị ngay lập tức
+            _confirmedDeliveredIds.Add(order.Id);
+            _orders.RemoveAll(o => o.Id == order.Id);
+            await InvokeAsync(StateHasChanged);
+
+            // Sau đó sync lại với Firestore (delay để tránh propagation lag)
+            await Task.Delay(1200);
             await LoadOrders();
         }
     }

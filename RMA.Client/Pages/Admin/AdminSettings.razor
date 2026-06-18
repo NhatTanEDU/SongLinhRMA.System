@@ -1,0 +1,295 @@
+@page "/admin/settings"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using RMA.Shared.DTOs
+@using System.Text.Json
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Cấu Hình & Nhật Ký Hoạt Động (Audit Logs) - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">THIẾT LẬP HỆ THỐNG & AUDIT LOGS</MudText>
+        <MudText Typo="Typo.body2" Class="text-secondary">Thiết lập các mốc thời gian cảnh báo SLA, kích hoạt các tiến trình chạy ngầm và tra cứu nhật ký ghi vết hoạt động quản trị.</MudText>
+    </div>
+
+    <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" Class="rounded-xl">
+        <!-- TAB 1: CẤU HÌNH SLA -->
+        <MudTabPanel Text="CẤU HÌNH SLA BẢO HÀNH" Icon="@Icons.Material.Filled.Tune">
+            <div class="pa-6 bg-white rounded-b-xl">
+                <MudGrid>
+                    <MudItem xs="12" md="6">
+                        <MudCard Outlined="true" Class="pa-6 rounded-xl border-solid mb-4" Style="background-color: #fafafa;">
+                            <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">Thời Hạn Cảnh Báo Gửi Hãng</MudText>
+                            <MudForm @ref="_settingsForm" @bind-IsValid="@_settingsFormIsValid">
+                                <div class="d-flex align-center gap-4 mb-4">
+                                    <MudNumericField @bind-Value="_yellowDays" 
+                                                     Label="Cảnh Báo Vàng (Sắp Quá Hạn)" 
+                                                     Variant="Variant.Outlined" 
+                                                     Min="1" 
+                                                     Max="90" 
+                                                     Required="true" 
+                                                     Adornment="Adornment.End" 
+                                                     AdornmentText="Ngày" />
+                                    <MudTooltip Text="Mốc thời gian gửi hãng mà vượt quá số ngày này, phiếu bảo hành sẽ hiển thị Cảnh báo Vàng trên hệ thống.">
+                                        <MudIcon Icon="@Icons.Material.Filled.Help" Color="Color.Default" />
+                                    </MudTooltip>
+                                </div>
+
+                                <div class="d-flex align-center gap-4 mb-6">
+                                    <MudNumericField @bind-Value="_redDays" 
+                                                     Label="Cảnh Báo Đỏ (Quá Hạn/Trễ SLA)" 
+                                                     Variant="Variant.Outlined" 
+                                                     Min="1" 
+                                                     Max="90" 
+                                                     Required="true" 
+                                                     Adornment="Adornment.End" 
+                                                     AdornmentText="Ngày" />
+                                    <MudTooltip Text="Mốc thời gian gửi hãng mà vượt quá số ngày này, phiếu sẽ báo đỏ và tự động chuyển độ ưu tiên thành GẤP, đồng thời gửi cảnh báo push FCM.">
+                                        <MudIcon Icon="@Icons.Material.Filled.Help" Color="Color.Default" />
+                                    </MudTooltip>
+                                </div>
+                            </MudForm>
+
+                            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveSlaSettings" Disabled="@(!_settingsFormIsValid || _savingSettings)" Class="rounded-lg py-2.5 px-6 fw-bold">
+                                @if (_savingSettings)
+                                {
+                                    <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                                    <span>Đang cập nhật...</span>
+                                }
+                                else
+                                {
+                                    <span>Lưu Cấu Hình SLA</span>
+                                }
+                            </MudButton>
+                        </MudCard>
+                    </MudItem>
+
+                    <MudItem xs="12" md="6">
+                        <MudCard Outlined="true" Class="pa-6 rounded-xl border-solid h-100" Style="background-color: #fafafa;">
+                            <MudText Typo="Typo.h6" Class="fw-bold mb-2" Style="color: #2C3E50;">Thông tin SLA & Caching</MudText>
+                            <MudText Typo="Typo.body2" Class="text-secondary mb-4">
+                                Các tham số SLA được lưu trữ động tại collection <code>system_settings</code> của Google Cloud Firestore.
+                                <br/><br/>
+                                Để tối ưu hóa hiệu năng và giảm chi phí hạ tầng (Read Operations), server đã tích hợp <strong>IMemoryCache</strong> với thời hạn 10 phút. 
+                                <br/><br/>
+                                <span class="text-danger fw-bold">Lưu ý:</span> Khi bạn cập nhật cấu hình ở khung bên cạnh, server sẽ lập tức xóa cache cũ (Invalidate cache) và áp dụng mốc cảnh báo mới cho lượt quét tiếp theo mà không cần khởi động lại ứng dụng.
+                            </MudText>
+                        </MudCard>
+                    </MudItem>
+                </MudGrid>
+            </div>
+        </MudTabPanel>
+
+        <!-- TAB 2: AUDIT LOGS -->
+        <MudTabPanel Text="NHẬT KÝ HỆ THỐNG (AUDIT LOGS)" Icon="@Icons.Material.Filled.History">
+            <div class="pa-6 bg-white rounded-b-xl">
+                @if (_loadingLogs)
+                {
+                    <div class="d-flex justify-center my-8">
+                        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+                    </div>
+                }
+                else
+                {
+                    <MudDataGrid Items="@_logs" Hover="true" Striped="true" Outlined="true" Class="rounded-lg">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Lịch Sử Các Thao Tác Của Admin</MudText>
+                            <MudSpacer />
+                            <MudTextField @bind-Value="_searchQuery" Placeholder="Tìm hoạt động, người dùng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                        </ToolBarContent>
+                        <Columns>
+                            <HierarchyColumn T="AuditLogDto" />
+                            <TemplateColumn Title="Thời Gian">
+                                <CellTemplate>
+                                    @context.Item.Timestamp.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.User" Title="Người Vận Hành" CellStyle="font-weight: bold;" />
+                            <TemplateColumn Title="Hành Động">
+                                <CellTemplate>
+                                    @if (context.Item.Action.Contains("BYPASS"))
+                                    {
+                                        <span class="badge-custom bg-danger">BYPASS</span>
+                                    }
+                                    else if (context.Item.Action.Contains("USER") || context.Item.Action.Contains("DELETE"))
+                                    {
+                                        <span class="badge-custom bg-primary">SECURITY</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge-custom bg-teal">SYSTEM</span>
+                                    }
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.Details" Title="Chi Tiết Thao Tác" />
+                        </Columns>
+                        <ChildRowContent>
+                            <MudCard Elevation="0" Class="pa-4" Style="background-color: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px;">
+                                <MudCardContent>
+                                    <MudGrid>
+                                        @if (!string.IsNullOrEmpty(context.Item.OldValue))
+                                        {
+                                            <MudItem xs="12" md="6">
+                                                <MudText Typo="Typo.subtitle2" Color="Color.Error" Class="fw-bold mb-1">DỮ LIỆU CŨ (PRE-CHANGE)</MudText>
+                                                <pre style="background-color: #ffebee; color: #b71c1c; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; overflow-x: auto; max-height: 250px;">@FormatJson(context.Item.OldValue)</pre>
+                                            </MudItem>
+                                        }
+                                        @if (!string.IsNullOrEmpty(context.Item.NewValue))
+                                        {
+                                            <MudItem xs="12" md="6">
+                                                <MudText Typo="Typo.subtitle2" Color="Color.Success" Class="fw-bold mb-1">DỮ LIỆU MỚI (POST-CHANGE)</MudText>
+                                                <pre style="background-color: #e8f5e9; color: #1b5e20; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 0.8rem; overflow-x: auto; max-height: 250px;">@FormatJson(context.Item.NewValue)</pre>
+                                            </MudItem>
+                                        }
+                                        @if (string.IsNullOrEmpty(context.Item.OldValue) && string.IsNullOrEmpty(context.Item.NewValue))
+                                        {
+                                            <MudItem xs="12">
+                                                <MudText Typo="Typo.body2" Class="text-secondary italic">Thao tác này không thay đổi cấu trúc dữ liệu thực thể.</MudText>
+                                            </MudItem>
+                                        }
+                                    </MudGrid>
+                                </MudCardContent>
+                            </MudCard>
+                        </ChildRowContent>
+                        <PagerContent>
+                            <MudDataGridPager T="AuditLogDto" />
+                        </PagerContent>
+                    </MudDataGrid>
+                }
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+</MudContainer>
+
+<style>
+    .badge-custom {
+        display: inline-block;
+        padding: 2px 8px;
+        font-size: 0.75rem;
+        font-weight: bold;
+        border-radius: 4px;
+        color: white;
+    }
+    .bg-danger { background-color: #d50000; }
+    .bg-primary { background-color: #2C3E50; }
+    .bg-teal { background-color: #008080; }
+    .border-solid {
+        border: 1px solid #e0e0e0;
+    }
+</style>
+
+@code {
+    private bool _loadingLogs = true;
+    private bool _savingSettings = false;
+    private double _yellowDays = 10;
+    private double _redDays = 14;
+
+    private List<AuditLogDto> _logs = new();
+    private string _searchQuery = "";
+
+    private MudForm? _settingsForm;
+    private bool _settingsFormIsValid = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSettings();
+        await LoadLogs();
+    }
+
+    private async Task LoadSettings()
+    {
+        try
+        {
+            var settings = await Http.GetFromJsonAsync<List<SystemSettingDto>>("api/admin/settings");
+            if (settings != null)
+            {
+                var yellow = settings.FirstOrDefault(s => s.Key == "SlaYellowDays");
+                var red = settings.FirstOrDefault(s => s.Key == "SlaRedDays");
+
+                if (yellow != null && double.TryParse(yellow.Value, out var yVal))
+                {
+                    _yellowDays = yVal;
+                }
+                if (red != null && double.TryParse(red.Value, out var rVal))
+                {
+                    _redDays = rVal;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải cấu hình SLA: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task LoadLogs()
+    {
+        _loadingLogs = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<AuditLogDto>>("api/admin/logs");
+            _logs = result ?? new List<AuditLogDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải nhật ký hệ thống: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loadingLogs = false;
+        }
+    }
+
+    private async Task SaveSlaSettings()
+    {
+        if (_settingsForm != null) await _settingsForm.ValidateAsync();
+        if (!_settingsFormIsValid) return;
+
+        _savingSettings = true;
+        try
+        {
+            var payload = new List<SystemSettingDto>
+            {
+                new() { Key = "SlaYellowDays", Value = _yellowDays.ToString() },
+                new() { Key = "SlaRedDays", Value = _redDays.ToString() }
+            };
+
+            var response = await Http.PostAsJsonAsync("api/admin/settings", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Cập nhật mốc thời gian SLA hệ thống thành công!", Severity.Success);
+                await LoadSettings();
+                await LoadLogs();
+            }
+            else
+            {
+                Snackbar.Add("Cập nhật cấu hình thất bại.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _savingSettings = false;
+        }
+    }
+
+    private string FormatJson(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return string.Empty;
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            return JsonSerializer.Serialize(document, new JsonSerializerOptions { WriteIndented = true });
+        }
+        catch
+        {
+            return json;
+        }
+    }
+}

@@ -1,0 +1,267 @@
+@page "/admin/users"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Quản Lý Người Dùng & Phân Quyền - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <!-- Header -->
+    <div class="d-flex align-center justify-space-between mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">QUẢN LÝ NGƯỜI DÙNG & PHÂN QUYỀN</MudText>
+            <MudText Typo="Typo.body2" Class="text-secondary">Thêm mới nhân viên, thay đổi vai trò (Roles) và quản lý trạng thái hoạt động tài khoản.</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenAddUserDialog" Class="rounded-lg py-2.5 px-5 fw-bold">
+            Thêm Tài Khoản Mới
+        </MudButton>
+    </div>
+
+    <!-- Main Grid -->
+    <MudPaper Elevation="3" Class="pa-6 rounded-xl">
+        @if (_loading)
+        {
+            <div class="d-flex justify-center my-8">
+                <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <MudDataGrid Items="@FilteredUsers" Hover="true" Striped="true" Outlined="true" Class="rounded-lg border-solid">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Danh sách Tài Khoản Nhân Viên</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchString" Placeholder="Tìm tên tài khoản, email..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                </ToolBarContent>
+                <Columns>
+                    <PropertyColumn Property="x => x.Username" Title="Tên Đăng Nhập" CellStyle="font-weight: bold; color: #2C3E50;" />
+                    <PropertyColumn Property="x => x.Email" Title="Email" />
+                    <PropertyColumn Property="x => x.Phone" Title="Số Điện Thoại" />
+                    
+                    <TemplateColumn Title="Vai Trò">
+                        <CellTemplate>
+                            @if (context.Item.Role == "Sales")
+                            {
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Storefront">Kinh doanh (Sales)</MudChip>
+                            }
+                            else if (context.Item.Role == "Tech")
+                            {
+                                <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Build">Kỹ thuật (Tech)</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Filled">@context.Item.Role</MudChip>
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                    
+                    <TemplateColumn Title="Trạng Thái">
+                        <CellTemplate>
+                            @if (context.Item.Status == "Active")
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.CheckCircle">Đang hoạt động</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Block">Bị vô hiệu hóa</MudChip>
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                    
+                    <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                        <CellTemplate>
+                            <MudTooltip Text="Sửa tài khoản / quyền">
+                                <MudButton Variant="Variant.Outlined" 
+                                           Color="Color.Primary" 
+                                           StartIcon="@Icons.Material.Filled.Edit" 
+                                           Size="Size.Small" 
+                                           OnClick="@(() => OpenEditUserDialog(context.Item))"
+                                           Class="rounded-lg mr-2">
+                                    Sửa Quyền
+                                </MudButton>
+                            </MudTooltip>
+                            
+                            <MudTooltip Text="Xóa tài khoản">
+                                <MudButton Variant="Variant.Filled" 
+                                           Color="Color.Error" 
+                                           StartIcon="@Icons.Material.Filled.Delete" 
+                                           Size="Size.Small" 
+                                           OnClick="@(() => ConfirmDeleteUser(context.Item))"
+                                           Class="rounded-lg">
+                                    Xóa
+                                </MudButton>
+                            </MudTooltip>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <PagerContent>
+                    <MudDataGridPager T="SystemUserDto" />
+                </PagerContent>
+            </MudDataGrid>
+        }
+    </MudPaper>
+</MudContainer>
+
+@code {
+    private bool _loading = true;
+    private List<SystemUserDto> _users = new();
+    private string _searchString = "";
+
+    private IEnumerable<SystemUserDto> FilteredUsers => _users.Where(u =>
+    {
+        if (string.IsNullOrWhiteSpace(_searchString)) return true;
+        if (u.Username.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        if (u.Email.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        if (u.Phone.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    });
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<SystemUserDto>>("api/users");
+            _users = result ?? new List<SystemUserDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi khi tải danh sách người dùng: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenAddUserDialog()
+    {
+        var parameters = new DialogParameters<UserDialog>
+        {
+            { x => x.User, new SystemUserDto { Status = "Active", Role = "Tech" } },
+            { x => x.IsEdit, false }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("Thêm Mới Tài Khoản", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is SystemUserDto newUser)
+        {
+            _loading = true;
+            try
+            {
+                var response = await Http.PostAsJsonAsync("api/users", newUser);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Tạo mới tài khoản thành công!", Severity.Success);
+                    await LoadUsers();
+                }
+                else
+                {
+                    var msg = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Lỗi: {msg}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    private async Task OpenEditUserDialog(SystemUserDto user)
+    {
+        var parameters = new DialogParameters<UserDialog>
+        {
+            { x => x.User, new SystemUserDto 
+                { 
+                    Username = user.Username, 
+                    Email = user.Email, 
+                    Phone = user.Phone, 
+                    Role = user.Role, 
+                    Status = user.Status 
+                } 
+            },
+            { x => x.IsEdit, true }
+        };
+
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Small, FullWidth = true };
+        var dialog = await DialogService.ShowAsync<UserDialog>("Cập Nhật Quyền & Tài Khoản", parameters, options);
+        var result = await dialog.Result;
+
+        if (result != null && !result.Canceled && result.Data is SystemUserDto updatedUser)
+        {
+            _loading = true;
+            try
+            {
+                var response = await Http.PutAsJsonAsync($"api/users/{updatedUser.Username}", updatedUser);
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Cập nhật thông tin tài khoản thành công!", Severity.Success);
+                    await LoadUsers();
+                }
+                else
+                {
+                    var msg = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Lỗi: {msg}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+    }
+
+    private async Task ConfirmDeleteUser(SystemUserDto user)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận xóa tài khoản",
+            $"Bạn có chắc chắn muốn xóa vĩnh viễn tài khoản '{user.Username}' khỏi hệ thống không? Hành động này không thể hoàn tác.",
+            yesText: "Xóa tài khoản", cancelText: "Hủy bỏ");
+
+        if (confirm == true)
+        {
+            _loading = true;
+            try
+            {
+                var response = await Http.DeleteAsync($"api/users/{user.Username}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add($"Đã xóa tài khoản '{user.Username}' thành công!", Severity.Success);
+                    await LoadUsers();
+                }
+                else
+                {
+                    var msg = await response.Content.ReadAsStringAsync();
+                    Snackbar.Add($"Xóa tài khoản thất bại: {msg}", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                _loading = false;
+            }
+        }
+    }
+}

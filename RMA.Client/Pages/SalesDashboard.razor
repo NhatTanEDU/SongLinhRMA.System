@@ -249,6 +249,8 @@
 @code {
     private List<SalesOrderDto> _orders = new();
     private bool _loading = true;
+    private bool _isLoadingOrders = false;
+    private bool _pendingRefresh = false;
     private string _searchString = "";
     private HubConnection? _hubConnection;
 
@@ -276,9 +278,26 @@
 
     private async Task LoadOrders()
     {
+        if (_isLoadingOrders)
+        {
+            _pendingRefresh = true;
+            return;
+        }
+
+        _isLoadingOrders = true;
+        _pendingRefresh = false;
+
         try
         {
-            _orders = await Http.GetFromJsonAsync<List<SalesOrderDto>>("api/salesorders") ?? new List<SalesOrderDto>();
+            var request = new HttpRequestMessage(HttpMethod.Get, "api/salesorders");
+            request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
+            {
+                NoCache = true,
+                NoStore = true,
+                MustRevalidate = true
+            };
+            var response = await Http.SendAsync(request);
+            _orders = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new List<SalesOrderDto>();
             await ComputeStats();
         }
         catch (Exception ex)
@@ -288,7 +307,14 @@
         finally
         {
             _loading = false;
-            StateHasChanged();
+            _isLoadingOrders = false;
+            await InvokeAsync(StateHasChanged);
+
+            if (_pendingRefresh)
+            {
+                _pendingRefresh = false;
+                await LoadOrders();
+            }
         }
     }
 

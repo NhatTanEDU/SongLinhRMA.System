@@ -1,0 +1,405 @@
+@page "/admin/rma"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Trung Tâm Giám Sát Bảo Hành (RMA Command Center) - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">TRUNG TÂM GIÁM SÁT BẢO HÀNH (RMA COMMAND CENTER)</MudText>
+        <MudText Typo="Typo.body2" Class="text-secondary">Giám sát tiến độ xử lý phiếu bảo hành, điều phối phân công kỹ thuật viên và trực tiếp xử lý các tranh chấp, khiếu nại của khách hàng.</MudText>
+    </div>
+
+    <!-- Active Tickets Grid -->
+    <MudPaper Elevation="3" Class="pa-6 rounded-xl">
+        @if (_loading)
+        {
+            <div class="d-flex justify-center my-8">
+                <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <MudDataGrid Items="@_tickets" Hover="true" Striped="true" Outlined="true" Class="rounded-lg">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Phiếu RMA Đang Hoạt Động</MudText>
+                    <MudSpacer />
+                    
+                    <MudSelect T="string" @bind-Value="_selectedSlaFilter" Label="Lọc theo SLA Warning" Variant="Variant.Outlined" Class="mt-0 mr-4" Margin="Margin.Dense" Style="width: 200px;" Dense="true" Clearable="true">
+                        <MudSelectItem Value='@("Red")'>🚨 Quá Hạn (Đỏ)</MudSelectItem>
+                        <MudSelectItem Value='@("Yellow")'>⚠️ Sắp Quá Hạn (Vàng)</MudSelectItem>
+                        <MudSelectItem Value='@("Green")'>✔️ An Toàn (Xanh)</MudSelectItem>
+                    </MudSelect>
+
+                    <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã phiếu, S/N, lỗi..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                </ToolBarContent>
+                <Columns>
+                    <TemplateColumn Title="Mã Phiếu / S/N" CellStyle="font-weight: bold;">
+                        <CellTemplate>
+                            <div class="d-flex flex-column">
+                                <span style="font-family: monospace; color: #2C3E50;">#@context.Item.Id.Substring(0, Math.Min(8, context.Item.Id.Length)).ToUpper()</span>
+                                <span class="text-secondary" style="font-size: 0.8rem;">S/N: @context.Item.DeviceSerialNumber</span>
+                            </div>
+                        </CellTemplate>
+                    </TemplateColumn>
+                    
+                    <PropertyColumn Property="x => x.CustomerName" Title="Khách Hàng" />
+                    
+                    <TemplateColumn Title="Mức Độ / SLA">
+                        <CellTemplate>
+                            <div class="d-flex align-center gap-2">
+                                @if (context.Item.IsUrgent)
+                                {
+                                    <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Filled">GẤP</MudChip>
+                                }
+                                @if (context.Item.WarningColor == "Red")
+                                {
+                                    <span class="dot bg-danger-dot" title="Quá hạn gửi hãng"></span>
+                                }
+                                else if (context.Item.WarningColor == "Yellow")
+                                {
+                                    <span class="dot bg-warning-dot" title="Sắp tới hạn cảnh báo"></span>
+                                }
+                                else
+                                {
+                                    <span class="dot bg-success-dot" title="Thời gian an toàn"></span>
+                                }
+                            </div>
+                        </CellTemplate>
+                    </TemplateColumn>
+
+                    <PropertyColumn Property="x => x.ProblemDescription" Title="Lỗi Thiết Bị" />
+                    
+                    <TemplateColumn Title="Trạng Thái">
+                        <CellTemplate>
+                            <MudChip T="string" Size="Size.Small" Variant="Variant.Filled" 
+                                     Style="@($"background-color: {context.Item.StatusColorCode ?? "#e0e0e0"}; color: white; font-weight: bold;")">
+                                @context.Item.StatusName
+                            </MudChip>
+                        </CellTemplate>
+                    </TemplateColumn>
+
+                    <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                        <CellTemplate>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Visibility" Size="Size.Small" OnClick="@(() => OpenTicketDetail(context.Item))" Class="rounded-lg mr-2">
+                                Chi Tiết
+                            </MudButton>
+
+                            @if (!context.Item.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase))
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.AssignmentInd" Size="Size.Small" OnClick="@(() => OpenDispatchDialog(context.Item))" Class="rounded-lg mr-2">
+                                    Phân Công
+                                </MudButton>
+
+                                <MudButton Variant="Variant.Outlined" Color="Color.Error" StartIcon="@Icons.Material.Filled.SwapHoriz" Size="Size.Small" OnClick="@(() => OpenOverrideStatusDialog(context.Item))" Class="rounded-lg">
+                                    Ghi Đè
+                                </MudButton>
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <PagerContent>
+                    <MudDataGridPager T="RmaTicketDto" />
+                </PagerContent>
+            </MudDataGrid>
+        }
+    </MudPaper>
+
+    <!-- Dispatch Modal Dialog -->
+    @if (_showDispatchDialog)
+    {
+        <div class="custom-dialog-backdrop">
+            <div class="custom-dialog-box pa-6 rounded-xl">
+                <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">
+                    ĐIỀU PHỐI PHIẾU BẢO HÀNH GIAO KỸ THUẬT
+                </MudText>
+
+                <MudForm @ref="_dispatchForm" @bind-IsValid="@_dispatchFormIsValid">
+                    <MudSelect T="string" @bind-Value="_selectedTechnician" Label="Chọn Kỹ Thuật Viên Phụ Trách" Variant="Variant.Outlined" Required="true" Class="mb-4">
+                        @foreach (var tech in _technicians)
+                        {
+                            <MudSelectItem Value="@tech.Username">@tech.Username (@tech.Email)</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudTextField @bind-Value="_dispatchNote" 
+                                  Label="Ghi chú điều phối phân công (Bắt buộc)" 
+                                  Variant="Variant.Outlined" 
+                                  Required="true" 
+                                  RequiredError="Vui lòng ghi chú chỉ đạo sửa chữa!" 
+                                  Lines="3" 
+                                  Class="mb-6" />
+                </MudForm>
+
+                <div class="d-flex justify-end gap-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CloseDispatchDialog" Class="rounded-lg">Hủy bỏ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="SubmitDispatch" Disabled="@(!_dispatchFormIsValid || _actionRunning)" Class="rounded-lg px-6">
+                        @if (_actionRunning)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Đang phân công...</span>
+                        }
+                        else
+                        {
+                            <span>Xác Nhận Phân Công</span>
+                        }
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Override Status Modal Dialog -->
+    @if (_showOverrideDialog)
+    {
+        <div class="custom-dialog-backdrop">
+            <div class="custom-dialog-box pa-6 rounded-xl" style="max-width: 450px;">
+                <MudText Typo="Typo.h6" Class="fw-bold mb-4 text-danger">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" Style="vertical-align: text-bottom;" />
+                    GHI ĐÈ TRẠNG THÁI PHIẾU (ESCALATION)
+                </MudText>
+
+                <MudForm @ref="_overrideForm" @bind-IsValid="@_overrideFormIsValid">
+                    <MudSelect T="string" @bind-Value="_overrideStatusId" Label="Chọn Trạng Thái Muốn Ghi Đè" Variant="Variant.Outlined" Required="true" Class="mb-4">
+                        @foreach (var st in _statusMasters)
+                        {
+                            <MudSelectItem Value="@st.Id">@st.StatusName</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <div class="d-flex align-center mb-6">
+                        <MudSwitch T="bool" @bind-Value="_overrideIsUrgent" Color="Color.Error" />
+                        <MudText Typo="Typo.body2" Class="ml-2 font-weight-bold">Đặt độ ưu tiên GẤP (Urgent)</MudText>
+                    </div>
+                </MudForm>
+
+                <div class="d-flex justify-end gap-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CloseOverrideDialog" Class="rounded-lg">Hủy bỏ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="SubmitOverride" Disabled="@(!_overrideFormIsValid || _actionRunning)" Class="rounded-lg px-6">
+                        Xác Nhận Ghi Đè
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</MudContainer>
+
+<style>
+    .custom-dialog-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1200;
+    }
+    .custom-dialog-box {
+        background-color: #ffffff;
+        width: 90%;
+        max-width: 550px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        border-top: 6px solid #2C3E50;
+    }
+    .dot {
+        height: 12px;
+        width: 12px;
+        border-radius: 50%;
+        display: inline-block;
+    }
+    .bg-success-dot { background-color: #4caf50; }
+    .bg-warning-dot { background-color: #ffb300; }
+    .bg-danger-dot { background-color: #f44336; }
+</style>
+
+@code {
+    private bool _loading = true;
+    private bool _actionRunning = false;
+    private List<RmaTicketDto> _tickets = new();
+    private List<SystemUserDto> _technicians = new();
+    private List<StatusMasterDto> _statusMasters = new();
+    private string _searchString = "";
+    private string _selectedSlaFilter = "";
+
+    // Dispatch states
+    private bool _showDispatchDialog = false;
+    private RmaTicketDto? _dispatchTarget;
+    private string _selectedTechnician = "";
+    private string _dispatchNote = "";
+    private MudForm? _dispatchForm;
+    private bool _dispatchFormIsValid = false;
+
+    // Override states
+    private bool _showOverrideDialog = false;
+    private RmaTicketDto? _overrideTarget;
+    private string _overrideStatusId = "";
+    private bool _overrideIsUrgent = false;
+    private MudForm? _overrideForm;
+    private bool _overrideFormIsValid = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadTicketsAndRefData();
+    }
+
+    private async Task LoadTicketsAndRefData()
+    {
+        _loading = true;
+        try
+        {
+            // Load Active Tickets
+            var rawTickets = await Http.GetFromJsonAsync<List<RmaTicketDto>>("api/rmatickets") ?? new();
+            _tickets = rawTickets.Where(t => !t.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase)).ToList();
+
+            // Load Tech Users
+            var users = await Http.GetFromJsonAsync<List<SystemUserDto>>("api/users") ?? new();
+            _technicians = users.Where(u => u.Role == "Tech" && u.Status == "Active").ToList();
+
+            // Load Status Masters
+            var statuses = await Http.GetFromJsonAsync<List<StatusMasterDto>>("api/rmatickets/statuses") ?? new();
+            _statusMasters = statuses;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải dữ liệu phòng bảo hành: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenTicketDetail(RmaTicketDto ticket)
+    {
+        var parameters = new DialogParameters { ["Ticket"] = ticket };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
+        await DialogService.ShowAsync<RmaTicketDetailDialog>("Chi Tiết Phiếu RMA", parameters, options);
+    }
+
+    #region Dispatch
+
+    private void OpenDispatchDialog(RmaTicketDto ticket)
+    {
+        _dispatchTarget = ticket;
+        _selectedTechnician = _technicians.FirstOrDefault()?.Username ?? "";
+        _dispatchNote = "";
+        _showDispatchDialog = true;
+    }
+
+    private void CloseDispatchDialog()
+    {
+        _showDispatchDialog = false;
+        _dispatchTarget = null;
+    }
+
+    private async Task SubmitDispatch()
+    {
+        if (_dispatchForm != null) await _dispatchForm.ValidateAsync();
+        if (!_dispatchFormIsValid || _dispatchTarget == null) return;
+
+        _actionRunning = true;
+        try
+        {
+            var payload = new DispatchTicketDto
+            {
+                TicketId = _dispatchTarget.Id,
+                TechnicianUsername = _selectedTechnician,
+                Note = _dispatchNote
+            };
+
+            var response = await Http.PostAsJsonAsync("api/admin/rmatickets/dispatch", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Đã bàn giao phiếu cho kỹ thuật viên {_selectedTechnician} thành công!", Severity.Success);
+                _showDispatchDialog = false;
+                await LoadTicketsAndRefData();
+            }
+            else
+            {
+                Snackbar.Add("Bàn giao phiếu sửa chữa thất bại.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
+    }
+
+    #endregion
+
+    #region Override Status
+
+    private void OpenOverrideStatusDialog(RmaTicketDto ticket)
+    {
+        _overrideTarget = ticket;
+        _overrideStatusId = ticket.StatusId;
+        _overrideIsUrgent = ticket.IsUrgent;
+        _showOverrideDialog = true;
+    }
+
+    private void CloseOverrideDialog()
+    {
+        _showOverrideDialog = false;
+        _overrideTarget = null;
+    }
+
+    private async Task SubmitOverride()
+    {
+        if (_overrideForm != null) await _overrideForm.ValidateAsync();
+        if (!_overrideFormIsValid || _overrideTarget == null) return;
+
+        _actionRunning = true;
+        try
+        {
+            // Build the standard update payload for RMA Ticket Controller PUT
+            var payload = new RmaTicketCreateDto
+            {
+                DeviceId = _overrideTarget.DeviceId,
+                CustomerId = _overrideTarget.CustomerId,
+                StatusId = _overrideStatusId,
+                VendorId = _overrideTarget.VendorId,
+                ProblemDescription = _overrideTarget.ProblemDescription,
+                ServiceMode = _overrideTarget.ServiceMode,
+                IsUrgent = _overrideIsUrgent,
+                StaffNote = string.IsNullOrWhiteSpace(_overrideTarget.StaffNote) 
+                    ? "[Ghi đè bởi Admin]" 
+                    : $"{_overrideTarget.StaffNote}\n[Ghi đè bởi Admin]",
+                EndUserName = _overrideTarget.EndUserName
+            };
+
+            var response = await Http.PutAsJsonAsync($"api/rmatickets/{_overrideTarget.Id}", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Ghi đè trạng thái phiếu bảo hành thành công!", Severity.Success);
+                _showOverrideDialog = false;
+                await LoadTicketsAndRefData();
+            }
+            else
+            {
+                Snackbar.Add("Ghi đè trạng thái thất bại.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionRunning = false;
+        }
+    }
+
+    #endregion
+}

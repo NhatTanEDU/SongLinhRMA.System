@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using RMA.Server.Entities;
 using RMA.Server.Services;
@@ -159,15 +160,22 @@ namespace RMA.Server.Tests
             mockScopeFactory.Setup(f => f.CreateScope()).Returns(mockScope.Object);
             mockScope.Setup(s => s.ServiceProvider).Returns(mockServiceProvider.Object);
 
+            var mockSettingRepo = new Mock<FirestoreRepository<SystemSetting>>(null!, "system_settings");
+            mockSettingRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<SystemSetting>());
+
             mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<RmaTicket>))).Returns(mockTicketRepo.Object);
             mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<StatusMaster>))).Returns(mockStatusRepo.Object);
             mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<Customer>))).Returns(mockCustomerRepo.Object);
+            mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<SystemSetting>))).Returns(mockSettingRepo.Object);
+
+            var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
             var service = new RmaAlertBackgroundService(
                 mockFcmService.Object,
                 mockConfig.Object,
                 mockLogger.Object,
-                mockScopeFactory.Object
+                mockScopeFactory.Object,
+                memoryCache
             );
 
             // Act

@@ -24,7 +24,7 @@
     <!-- Portal Cards -->
     <MudGrid Justify="Justify.Center" Spacing="4" Class="w-100">
         <!-- Sales Department Card -->
-        <MudItem xs="12" sm="6">
+        <MudItem xs="12" sm="6" md="4">
             <MudCard Elevation="4" 
                      Class="cursor-pointer rounded-xl hover-card d-flex flex-column align-center justify-center pa-8 text-center h-100" 
                      Style="border-top: 6px solid #0072BC;"
@@ -38,7 +38,7 @@
         </MudItem>
 
         <!-- Technical & Warranty Department Card -->
-        <MudItem xs="12" sm="6">
+        <MudItem xs="12" sm="6" md="4">
             <MudCard Elevation="4" 
                      Class="cursor-pointer rounded-xl hover-card d-flex flex-column align-center justify-center pa-8 text-center h-100" 
                      Style="border-top: 6px solid #E51D24;"
@@ -50,6 +50,24 @@
                 <MudText Typo="Typo.body2" Class="text-secondary">Tiếp nhận thiết bị, xử lý kiểm tra kỹ thuật và quản lý phiếu RMA.</MudText>
             </MudCard>
         </MudItem>
+
+        <!-- System Administration Card (Only visible to Admin) -->
+        <AuthorizeView Roles="Admin">
+            <Authorized>
+                <MudItem xs="12" sm="6" md="4">
+                    <MudCard Elevation="4" 
+                             Class="cursor-pointer rounded-xl hover-card d-flex flex-column align-center justify-center pa-8 text-center h-100" 
+                             Style="border-top: 6px solid #2C3E50;"
+                             @onclick='() => NavigateTo("/admin/dashboard")'>
+                        <div class="pa-5 rounded-circle mb-4" style="background-color: rgba(44, 62, 80, 0.1);">
+                            <MudIcon Icon="@Icons.Material.Filled.AdminPanelSettings" Style="font-size: 3rem; color: #2C3E50;" />
+                        </div>
+                        <MudText Typo="Typo.h5" Class="fw-bold mb-3" Style="color: #2C3E50;">QUẢN TRỊ HỆ THỐNG</MudText>
+                        <MudText Typo="Typo.body2" Class="text-secondary">Giám sát tổng thể, phân quyền người dùng, quản lý SLA và bypass đơn hàng.</MudText>
+                    </MudCard>
+                </MudItem>
+            </Authorized>
+        </AuthorizeView>
     </MudGrid>
 </MudContainer>
 

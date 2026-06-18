@@ -1,0 +1,649 @@
+@page "/admin/catalog"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Quản Trị Danh Mục & Kho Thiết Bị S/N - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">QUẢN TRỊ DANH MỤC & KHO S/N</MudText>
+        <MudText Typo="Typo.body2" Class="text-secondary">Cấu hình danh mục gốc, quản lý dòng sản phẩm và tra cứu vòng đời thiết bị theo Serial Number.</MudText>
+    </div>
+
+    <MudTabs Elevation="3" Rounded="true" ApplyEffectsToContainer="true" Class="rounded-xl">
+        <!-- TAB 1: KHO S/N & VÒNG ĐỜI THIẾT BỊ -->
+        <MudTabPanel Text="VÒNG ĐỜI THIẾT BỊ (S/N LOOKUP)" Icon="@Icons.Material.Filled.QrCodeScanner">
+            <div class="pa-6 bg-white rounded-b-xl">
+                <MudGrid Class="align-center mb-6">
+                    <MudItem xs="12" sm="8" md="6">
+                        <MudTextField @bind-Value="_snSearchQuery" 
+                                      Label="Nhập mã Serial Number (S/N) tra cứu" 
+                                      Variant="Variant.Outlined" 
+                                      Placeholder="Ví dụ: DELLXPS15-..., SYS-..." 
+                                      Adornment="Adornment.End" 
+                                      AdornmentIcon="@Icons.Material.Filled.Search" 
+                                      OnAdornmentClick="LookupDevice" 
+                                      Immediate="true"
+                                      OnKeyDown="HandleSnSearchKeyDown" />
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="LookupDevice" Class="py-3 px-6 rounded-lg fw-bold">
+                            Tra Cứu Thiết Bị
+                        </MudButton>
+                    </MudItem>
+                </MudGrid>
+
+                @if (_lookupLoading)
+                {
+                    <div class="d-flex justify-center my-8">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    </div>
+                }
+                else if (_searched && _foundDevice == null)
+                {
+                    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="rounded-lg">
+                        Không tìm thấy thiết bị nào có mã S/N là: <strong>@_snSearchQuery</strong>. Vui lòng kiểm tra lại.
+                    </MudAlert>
+                }
+                else if (_foundDevice != null)
+                {
+                    <MudGrid Class="mb-6">
+                        <!-- Device Info Panel -->
+                        <MudItem xs="12" md="5">
+                            <MudCard Elevation="2" Class="pa-6 rounded-xl h-100" Style="border-top: 5px solid #2C3E50;">
+                                <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">Thông Tin Thiết Bị</MudText>
+                                <div class="d-flex flex-column gap-3">
+                                    <div class="d-flex justify-space-between border-bottom pb-2">
+                                        <span class="text-secondary font-weight-bold">Serial Number (S/N):</span>
+                                        <span class="fw-bold text-dark">@_foundDevice.SerialNumber</span>
+                                    </div>
+                                    <div class="d-flex justify-space-between border-bottom pb-2">
+                                        <span class="text-secondary font-weight-bold">Model / Dòng máy:</span>
+                                        <span class="fw-bold text-dark">@_foundDevice.ModelName</span>
+                                    </div>
+                                    <div class="d-flex justify-space-between border-bottom pb-2">
+                                        <span class="text-secondary font-weight-bold">Thương hiệu:</span>
+                                        <span class="fw-bold text-dark">@(_foundDevice.Brand ?? "Chưa rõ")</span>
+                                    </div>
+                                    <div class="d-flex justify-space-between border-bottom pb-2">
+                                        <span class="text-secondary font-weight-bold">Khách hàng mua máy:</span>
+                                        <span class="fw-bold text-primary">@_foundDevice.CustomerName</span>
+                                    </div>
+                                    <div class="d-flex justify-space-between border-bottom pb-2">
+                                        <span class="text-secondary font-weight-bold">Ngày bán / kích hoạt:</span>
+                                        <span class="text-dark">@(_foundDevice.PurchaseDate.HasValue ? _foundDevice.PurchaseDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "---")</span>
+                                    </div>
+                                    <div class="d-flex justify-space-between pb-1">
+                                        <span class="text-secondary font-weight-bold">Hạn bảo hành (Expiry):</span>
+                                        @if (_foundDevice.WarrantyExpiry.HasValue)
+                                        {
+                                            var expired = _foundDevice.WarrantyExpiry.Value < DateTime.UtcNow;
+                                            <span class="fw-bold @(expired ? "text-danger" : "text-success")">
+                                                @_foundDevice.WarrantyExpiry.Value.ToLocalTime().ToString("dd/MM/yyyy") @(expired ? "(Hết Hạn)" : "(Còn hạn)")
+                                            </span>
+                                        }
+                                        else
+                                        {
+                                            <span>---</span>
+                                        }
+                                    </div>
+                                </div>
+                            </MudCard>
+                        </MudItem>
+
+                        <!-- Device Lifecycle Timeline / Warranty History -->
+                        <MudItem xs="12" md="7">
+                            <MudCard Elevation="2" Class="pa-6 rounded-xl h-100">
+                                <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">
+                                    Lịch Sử Bảo Hành / Sửa Chữa (@_deviceTickets.Count Lần)
+                                </MudText>
+                                
+                                @if (!_deviceTickets.Any())
+                                {
+                                    <div class="d-flex flex-column align-center justify-center py-12" style="background-color: #f8f9fa; border-radius: 12px; border: 1px dashed #e0e0e0;">
+                                        <MudIcon Icon="@Icons.Material.Filled.CheckCircleOutline" Size="Size.Large" Color="Color.Success" Class="mb-2" />
+                                        <MudText Typo="Typo.body2" Class="text-secondary">Thiết bị này chưa từng ghi nhận sự cố hay mang đi bảo hành.</MudText>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <MudDataGrid Items="@_deviceTickets" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                                        <Columns>
+                                            <PropertyColumn Property="x => x.Id" Title="Mã Phiếu RMA" CellStyle="font-weight: bold; font-family: monospace;" />
+                                            <TemplateColumn Title="Ngày Nhận">
+                                                <CellTemplate>
+                                                    @context.Item.ReceivedDate.ToLocalTime().ToString("dd/MM/yyyy")
+                                                </CellTemplate>
+                                            </TemplateColumn>
+                                            <PropertyColumn Property="x => x.ProblemDescription" Title="Mô Tả Lỗi" />
+                                            <TemplateColumn Title="Trạng Thái">
+                                                <CellTemplate>
+                                                    <MudChip T="string" Size="Size.Small" Variant="Variant.Text" 
+                                                             Style="@($"color: {context.Item.StatusColorCode ?? "#757575"}; font-weight: bold;")">
+                                                        @context.Item.StatusName
+                                                    </MudChip>
+                                                </CellTemplate>
+                                            </TemplateColumn>
+                                        </Columns>
+                                    </MudDataGrid>
+                                }
+                            </MudCard>
+                        </MudItem>
+                    </MudGrid>
+                }
+                else
+                {
+                    <div class="d-flex flex-column align-center justify-center py-16" style="background-color: #f8f9fa; border-radius: 16px; border: 1px dashed #cccccc;">
+                        <MudIcon Icon="@Icons.Material.Filled.DeveloperBoard" Size="Size.Large" Style="color: #2C3E50; font-size: 4rem;" Class="mb-3" />
+                        <MudText Typo="Typo.h6" Class="fw-bold text-dark">TRA CỨU VÒNG ĐỜI SẢN PHẨM</MudText>
+                        <MudText Typo="Typo.body2" Class="text-secondary px-6 text-center" Style="max-width: 500px;">
+                            Nhập mã S/N trên tem nhãn thiết bị để biết được khách hàng mua máy là ai, máy thuộc đơn hàng nào, hạn bảo hành và lịch sử những lần gửi sửa chữa RMA.
+                        </MudText>
+                    </div>
+                }
+            </div>
+        </MudTabPanel>
+
+        <!-- TAB 2: DÒNG SẢN PHẨM (MODELS) -->
+        <MudTabPanel Text="DÒNG SẢN PHẨM (MODELS)" Icon="@Icons.Material.Filled.Devices">
+            <div class="pa-6 bg-white rounded-b-xl">
+                <div class="d-flex justify-end mb-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddModelDialog" Class="rounded-lg py-2">
+                        Thêm Model Mới
+                    </MudButton>
+                </div>
+
+                @if (_loading)
+                {
+                    <div class="d-flex justify-center my-8">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    </div>
+                }
+                else
+                {
+                    <MudDataGrid Items="@_models" Hover="true" Striped="true" Outlined="true" Class="rounded-lg">
+                        <ToolBarContent>
+                            <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Dòng Máy & Quy Tắc Cấu Hình</MudText>
+                            <MudSpacer />
+                            <MudTextField @bind-Value="_modelSearch" Placeholder="Tìm dòng máy, thương hiệu..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                        </ToolBarContent>
+                        <Columns>
+                            <PropertyColumn Property="x => x.ModelName" Title="Tên Dòng Máy (Model)" CellStyle="font-weight: bold; color: #2C3E50;" />
+                            <PropertyColumn Property="x => x.Brand" Title="Thương Hiệu" />
+                            <TemplateColumn Title="Danh Mục">
+                                <CellTemplate>
+                                    @(_categories.FirstOrDefault(c => c.Id == context.Item.CategoryId)?.Name ?? "Phổ thông")
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <PropertyColumn Property="x => x.StockQuantity" Title="Tồn Kho Sales" HeaderStyle="text-align: center;" CellStyle="text-align: center;" />
+                            <PropertyColumn Property="x => x.WarrantyMonths" Title="Bảo Hành (Tháng)" HeaderStyle="text-align: center;" CellStyle="text-align: center;" />
+                            <TemplateColumn Title="Bắt buộc S/N" HeaderStyle="text-align: center;" CellStyle="text-align: center;">
+                                <CellTemplate>
+                                    <MudSwitch T="bool" Value="@context.Item.IsSerialRequired" 
+                                               Color="Color.Secondary" 
+                                               ValueChanged="@((e) => ToggleModelSerialRequired(context.Item))" />
+                                </CellTemplate>
+                            </TemplateColumn>
+                            <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                                <CellTemplate>
+                                    <MudTooltip Text="Sửa Model">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenEditModelDialog(context.Item))" />
+                                    </MudTooltip>
+                                    <MudTooltip Text="Xóa Model">
+                                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteModel(context.Item))" />
+                                    </MudTooltip>
+                                </CellTemplate>
+                            </TemplateColumn>
+                        </Columns>
+                        <PagerContent>
+                            <MudDataGridPager T="ModelDto" />
+                        </PagerContent>
+                    </MudDataGrid>
+                }
+            </div>
+        </MudTabPanel>
+
+        <!-- TAB 3: DANH MỤC GỐC -->
+        <MudTabPanel Text="DANH MỤC (CATEGORIES)" Icon="@Icons.Material.Filled.Category">
+            <div class="pa-6 bg-white rounded-b-xl">
+                <div class="d-flex justify-end mb-4">
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddCategoryDialog" Class="rounded-lg py-2">
+                        Thêm Danh Mục
+                    </MudButton>
+                </div>
+
+                @if (_loading)
+                {
+                    <div class="d-flex justify-center my-8">
+                        <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+                    </div>
+                }
+                else
+                {
+                    <MudGrid>
+                        <MudItem xs="12" md="8" Class="mx-auto">
+                            <MudDataGrid Items="@_categories" Hover="true" Striped="true" Outlined="true" Class="rounded-lg">
+                                <Columns>
+                                    <PropertyColumn Property="x => x.Id" Title="Mã Danh Mục" CellStyle="font-family: monospace;" />
+                                    <PropertyColumn Property="x => x.Name" Title="Tên Danh Mục Sản Phẩm" CellStyle="font-weight: bold; color: #2C3E50;" />
+                                    <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                                        <CellTemplate>
+                                            <MudTooltip Text="Sửa tên">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenEditCategoryDialog(context.Item))" />
+                                            </MudTooltip>
+                                            <MudTooltip Text="Xóa danh mục">
+                                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteCategory(context.Item))" />
+                                            </MudTooltip>
+                                        </CellTemplate>
+                                    </TemplateColumn>
+                                </Columns>
+                            </MudDataGrid>
+                        </MudItem>
+                    </MudGrid>
+                }
+            </div>
+        </MudTabPanel>
+    </MudTabs>
+
+    <!-- Dialog for Model Add/Edit -->
+    @if (_showModelDialog)
+    {
+        <div class="custom-dialog-backdrop">
+            <div class="custom-dialog-box pa-6 rounded-xl">
+                <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">
+                    @(string.IsNullOrEmpty(_editingModel.Id) ? "THÊM MODEL MỚI" : "CẬP NHẬT MODEL")
+                </MudText>
+                
+                <MudForm @ref="_modelForm" @bind-IsValid="@_modelFormIsValid">
+                    <MudTextField @bind-Value="_editingModel.ModelName" Label="Tên Dòng Máy (Model Name)" Variant="Variant.Outlined" Required="true" RequiredError="Tên dòng máy là bắt buộc!" Class="mb-4" />
+                    <MudTextField @bind-Value="_editingModel.Brand" Label="Thương Hiệu" Variant="Variant.Outlined" Required="true" RequiredError="Thương hiệu là bắt buộc!" Class="mb-4" />
+                    
+                    <MudSelect @bind-Value="_editingModel.CategoryId" Label="Danh Mục Sản Phẩm" Variant="Variant.Outlined" Required="true" Class="mb-4">
+                        @foreach (var cat in _categories)
+                        {
+                            <MudSelectItem Value="@cat.Id">@cat.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+
+                    <MudNumericField @bind-Value="_editingModel.StockQuantity" Label="Số lượng tồn kho ban đầu" Variant="Variant.Outlined" Min="0" Class="mb-4" />
+                    <MudNumericField @bind-Value="_editingModel.WarrantyMonths" Label="Số tháng bảo hành tiêu chuẩn" Variant="Variant.Outlined" Min="1" Class="mb-4" />
+
+                    <div class="d-flex align-center mb-6">
+                        <MudSwitch T="bool" @bind-Value="_editingModel.IsSerialRequired" Color="Color.Secondary" />
+                        <MudText Typo="Typo.body2" Class="ml-2 font-weight-bold">Bắt buộc phải quét Serial Number khi xuất kho</MudText>
+                    </div>
+                </MudForm>
+
+                <div class="d-flex justify-end gap-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CloseModelDialog" Class="rounded-lg">Hủy bỏ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="SaveModel" Disabled="@(!_modelFormIsValid || _actionSaving)" Class="rounded-lg px-6">
+                        Lưu Thay Đổi
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Dialog for Category Add/Edit -->
+    @if (_showCategoryDialog)
+    {
+        <div class="custom-dialog-backdrop">
+            <div class="custom-dialog-box pa-6 rounded-xl" style="max-width: 400px;">
+                <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">
+                    @(string.IsNullOrEmpty(_editingCategory.Id) ? "THÊM DANH MỤC MỚI" : "CẬP NHẬT DANH MỤC")
+                </MudText>
+                
+                <MudForm @ref="_catForm" @bind-IsValid="@_catFormIsValid">
+                    <MudTextField @bind-Value="_editingCategory.Name" Label="Tên Danh Mục" Variant="Variant.Outlined" Required="true" RequiredError="Tên danh mục là bắt buộc!" Class="mb-6" />
+                </MudForm>
+
+                <div class="d-flex justify-end gap-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CloseCategoryDialog" Class="rounded-lg">Hủy bỏ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="SaveCategory" Disabled="@(!_catFormIsValid || _actionSaving)" Class="rounded-lg px-6">
+                        Lưu danh mục
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</MudContainer>
+
+<style>
+    .custom-dialog-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1200;
+    }
+    .custom-dialog-box {
+        background-color: #ffffff;
+        width: 90%;
+        max-width: 500px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        border-top: 6px solid #2C3E50;
+    }
+    .border-bottom {
+        border-bottom: 1px solid #f0f0f0;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private bool _actionSaving = false;
+    
+    private List<ModelDto> _models = new();
+    private List<CategoryDto> _categories = new();
+
+    private string _modelSearch = "";
+
+    // S/N Lookup Tab
+    private string _snSearchQuery = "";
+    private bool _lookupLoading = false;
+    private bool _searched = false;
+    private DeviceDto? _foundDevice;
+    private List<RmaTicketDto> _deviceTickets = new();
+
+    // Model dialog
+    private bool _showModelDialog = false;
+    private ModelDto _editingModel = new();
+    private MudForm? _modelForm;
+    private bool _modelFormIsValid = false;
+
+    // Category dialog
+    private bool _showCategoryDialog = false;
+    private CategoryDto _editingCategory = new();
+    private MudForm? _catForm;
+    private bool _catFormIsValid = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadCatalogData();
+    }
+
+    private async Task LoadCatalogData()
+    {
+        _loading = true;
+        try
+        {
+            _categories = await Http.GetFromJsonAsync<List<CategoryDto>>("api/referencedata/categories") ?? new();
+            _models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải dữ liệu danh mục: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    #region S/N Lifecycle Lookup
+
+    private async Task HandleSnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await LookupDevice();
+        }
+    }
+
+    private async Task LookupDevice()
+    {
+        if (string.IsNullOrWhiteSpace(_snSearchQuery))
+        {
+            Snackbar.Add("Vui lòng nhập mã S/N để tìm kiếm.", Severity.Warning);
+            return;
+        }
+
+        _lookupLoading = true;
+        _searched = true;
+        _foundDevice = null;
+        _deviceTickets.Clear();
+
+        try
+        {
+            var devices = await Http.GetFromJsonAsync<List<DeviceDto>>("api/devices");
+            _foundDevice = devices?.FirstOrDefault(d => d.SerialNumber.Equals(_snSearchQuery.Trim(), StringComparison.OrdinalIgnoreCase));
+            
+            if (_foundDevice != null)
+            {
+                // Load all tickets and filter locally by device
+                var tickets = await Http.GetFromJsonAsync<List<RmaTicketDto>>("api/rmatickets");
+                if (tickets != null)
+                {
+                    _deviceTickets = tickets.Where(t => t.DeviceId == _foundDevice.Id).OrderByDescending(t => t.ReceivedDate).ToList();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi truy xuất thiết bị: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _lookupLoading = false;
+        }
+    }
+
+    #endregion
+
+    #region Model CRUD
+
+    private void OpenAddModelDialog()
+    {
+        _editingModel = new ModelDto { CategoryId = _categories.FirstOrDefault()?.Id ?? "1", IsSerialRequired = true };
+        _showModelDialog = true;
+    }
+
+    private void OpenEditModelDialog(ModelDto model)
+    {
+        _editingModel = new ModelDto
+        {
+            Id = model.Id,
+            ModelName = model.ModelName,
+            Brand = model.Brand,
+            CategoryId = model.CategoryId,
+            StockQuantity = model.StockQuantity,
+            WarrantyMonths = model.WarrantyMonths,
+            IsSerialRequired = model.IsSerialRequired
+        };
+        _showModelDialog = true;
+    }
+
+    private void CloseModelDialog()
+    {
+        _showModelDialog = false;
+    }
+
+    private async Task SaveModel()
+    {
+        if (_modelForm != null) await _modelForm.ValidateAsync();
+        if (!_modelFormIsValid) return;
+
+        _actionSaving = true;
+        try
+        {
+            HttpResponseMessage response;
+            if (string.IsNullOrEmpty(_editingModel.Id))
+            {
+                response = await Http.PostAsJsonAsync("api/referencedata/models", _editingModel);
+            }
+            else
+            {
+                response = await Http.PutAsJsonAsync($"api/referencedata/models/{_editingModel.Id}", _editingModel);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Lưu dòng sản phẩm thành công!", Severity.Success);
+                _showModelDialog = false;
+                await LoadCatalogData();
+            }
+            else
+            {
+                Snackbar.Add("Không thể lưu dòng sản phẩm.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionSaving = false;
+        }
+    }
+
+    private async Task ToggleModelSerialRequired(ModelDto model)
+    {
+        model.IsSerialRequired = !model.IsSerialRequired;
+        try
+        {
+            var response = await Http.PutAsJsonAsync($"api/referencedata/models/{model.Id}", model);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Đã cập nhật quy tắc S/N cho dòng máy '{model.ModelName}'!", Severity.Success);
+                await LoadCatalogData();
+            }
+            else
+            {
+                Snackbar.Add("Cập nhật thất bại.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeleteModel(ModelDto model)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận xóa dòng sản phẩm",
+            $"Bạn có chắc chắn muốn xóa dòng sản phẩm '{model.ModelName}' không? Điều này có thể ảnh hưởng đến các thiết bị đã bán.",
+            yesText: "Xóa", cancelText: "Hủy bỏ");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"api/referencedata/models/{model.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Xóa dòng máy thành công!", Severity.Success);
+                    await LoadCatalogData();
+                }
+                else
+                {
+                    Snackbar.Add("Xóa thất bại. Model có thể đang được tham chiếu bởi thiết bị trong hệ thống.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    #endregion
+
+    #region Category CRUD
+
+    private void OpenAddCategoryDialog()
+    {
+        _editingCategory = new CategoryDto();
+        _showCategoryDialog = true;
+    }
+
+    private void OpenEditCategoryDialog(CategoryDto cat)
+    {
+        _editingCategory = new CategoryDto { Id = cat.Id, Name = cat.Name };
+        _showCategoryDialog = true;
+    }
+
+    private void CloseCategoryDialog()
+    {
+        _showCategoryDialog = false;
+    }
+
+    private async Task SaveCategory()
+    {
+        if (_catForm != null) await _catForm.ValidateAsync();
+        if (!_catFormIsValid) return;
+
+        _actionSaving = true;
+        try
+        {
+            HttpResponseMessage response;
+            if (string.IsNullOrEmpty(_editingCategory.Id))
+            {
+                response = await Http.PostAsJsonAsync("api/referencedata/categories", _editingCategory);
+            }
+            else
+            {
+                response = await Http.PutAsJsonAsync($"api/referencedata/categories/{_editingCategory.Id}", _editingCategory);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Lưu danh mục thành công!", Severity.Success);
+                _showCategoryDialog = false;
+                await LoadCatalogData();
+            }
+            else
+            {
+                Snackbar.Add("Không thể lưu danh mục.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionSaving = false;
+        }
+    }
+
+    private async Task DeleteCategory(CategoryDto cat)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận xóa danh mục",
+            $"Bạn có chắc chắn muốn xóa danh mục '{cat.Name}' không?",
+            yesText: "Xóa danh mục", cancelText: "Hủy bỏ");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"api/referencedata/categories/{cat.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Xóa danh mục thành công!", Severity.Success);
+                    await LoadCatalogData();
+                }
+                else
+                {
+                    Snackbar.Add("Xóa thất bại. Danh mục có thể đang chứa dòng sản phẩm.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+
+    #endregion
+}

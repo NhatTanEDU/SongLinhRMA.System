@@ -137,9 +137,10 @@
                     Console.WriteLine($"[Login] Đăng nhập thành công! Token: {result?.token?.Substring(0, 15)}...");
                     
                     // Cập nhật trạng thái giao diện (Tạm thời dùng Mock Provider)
+                    // Cập nhật trạng thái giao diện
                     if (AuthStateProvider is MockAuthStateProvider mockProvider)
                     {
-                        mockProvider.MarkUserAsAuthenticated(_model.Username);
+                        mockProvider.MarkUserAsAuthenticated(_model.Username, result?.token ?? string.Empty, result?.role ?? string.Empty);
                         Snackbar.Add($"Đăng nhập thành công!", Severity.Success);
                         NavigationManager.NavigateTo("/portal");
                     }
@@ -169,6 +170,7 @@
     public class LoginResult
     {
         public string token { get; set; } = string.Empty;
+        public string role { get; set; } = string.Empty;
         public string message { get; set; } = string.Empty;
     }
 }

@@ -1,0 +1,278 @@
+@page "/admin/sales"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+@inject NavigationManager NavigationManager
+
+<PageTitle>Giám Sát Bán Hàng & Giao Nhận - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">GIÁM SÁT BÁN HÀNG & GIAO NHẬN</MudText>
+        <MudText Typo="Typo.body2" Class="text-secondary">Giám sát trạng thái vận chuyển đơn hàng, kiểm tra chi tiết thiết bị và cưỡng chế xác nhận giao hàng (Bypass) trong trường hợp đặc biệt.</MudText>
+    </div>
+
+    <!-- Stats summary for Sales -->
+    <MudGrid Class="mb-6">
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 rounded-xl d-flex align-center gap-3 bg-white">
+                <MudAvatar Color="Color.Warning" Variant="Variant.Filled"><MudIcon Icon="@Icons.Material.Filled.PendingActions" /></MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary">Chờ giao nhận</MudText>
+                    <MudText Typo="Typo.h5" Class="fw-bold text-dark">@_orders.Count(o => o.Status != "Delivered") Đơn hàng</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 rounded-xl d-flex align-center gap-3 bg-white">
+                <MudAvatar Color="Color.Success" Variant="Variant.Filled"><MudIcon Icon="@Icons.Material.Filled.LocalShipping" /></MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary">Đã hoàn thành giao</MudText>
+                    <MudText Typo="Typo.h5" Class="fw-bold text-success">@_orders.Count(o => o.Status == "Delivered") Đơn hàng</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudPaper Elevation="2" Class="pa-4 rounded-xl d-flex align-center gap-3 bg-white" Style="border: 1px dashed #d50000;">
+                <MudAvatar Color="Color.Error" Variant="Variant.Filled"><MudIcon Icon="@Icons.Material.Filled.LockOpen" /></MudAvatar>
+                <div>
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary">Quyền can thiệp</MudText>
+                    <MudText Typo="Typo.h6" Class="fw-bold text-danger">Bypass & Cưỡng Chế Giao</MudText>
+                </div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Main Grid -->
+    <MudPaper Elevation="3" Class="pa-6 rounded-xl">
+        @if (_loading)
+        {
+            <div class="d-flex justify-center my-8">
+                <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <MudDataGrid Items="@_orders" Hover="true" Striped="true" Outlined="true" Class="rounded-lg">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Toàn Bộ Đơn Hàng Hệ Thống</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, tên khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                </ToolBarContent>
+                <Columns>
+                    <PropertyColumn Property="x => x.OrderCode" Title="Mã Đơn" CellStyle="font-weight: bold; color: #2C3E50;" />
+                    <PropertyColumn Property="x => x.CustomerName" Title="Khách Hàng" />
+                    <TemplateColumn Title="Ngày Tạo Đơn">
+                        <CellTemplate>
+                            @context.Item.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <TemplateColumn Title="Trạng Thái Giao">
+                        <CellTemplate>
+                            @if (context.Item.Status == "Pending")
+                            {
+                                <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.Pending">Chờ Giao</MudChip>
+                            }
+                            else if (context.Item.Status == "Delivering")
+                            {
+                                <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.DirectionsCar">Đang Giao</MudChip>
+                            }
+                            else if (context.Item.Status == "Delivered")
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled" Icon="@Icons.Material.Filled.DoneAll">Đã Hoàn Thành</MudChip>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Filled">@context.Item.Status</MudChip>
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                    <PropertyColumn Property="x => x.SalesNote" Title="Ghi Chú Nhân Viên" />
+                    <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                        <CellTemplate>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Info" StartIcon="@Icons.Material.Filled.Visibility" Size="Size.Small" OnClick="@(() => OpenOrderDetail(context.Item))" Class="rounded-lg mr-2">
+                                Chi Tiết
+                            </MudButton>
+
+                            @if (context.Item.Status != "Delivered")
+                            {
+                                <MudButton Variant="Variant.Filled" Color="Color.Error" StartIcon="@Icons.Material.Filled.LockOpen" Size="Size.Small" OnClick="@(() => OpenBypassDialog(context.Item))" Class="rounded-lg">
+                                    Bypass Giao
+                                </MudButton>
+                            }
+                            else
+                            {
+                                <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Icon="@Icons.Material.Filled.Lock">Đã Giao Đóng</MudChip>
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <PagerContent>
+                    <MudDataGridPager T="SalesOrderDto" />
+                </PagerContent>
+            </MudDataGrid>
+        }
+    </MudPaper>
+
+    <!-- Emergency Bypass dialog overlay -->
+    @if (_showBypassDialog)
+    {
+        <div class="custom-dialog-backdrop">
+            <div class="custom-dialog-box pa-6 rounded-xl">
+                <MudText Typo="Typo.h6" Class="fw-bold mb-2 text-danger">
+                    <MudIcon Icon="@Icons.Material.Filled.Warning" Class="mr-2" Style="vertical-align: text-bottom;" />
+                    CƯỠNG CHẾ XÁC NHẬN GIAO HÀNG
+                </MudText>
+                <MudText Typo="Typo.body2" Class="text-secondary mb-4">
+                    Thao tác này sẽ đổi trạng thái đơn hàng <strong>@_bypassTarget?.OrderCode</strong> sang <strong>Đã Giao</strong>, tự động cấp mã S/N giả lập cho thiết bị và giảm số lượng tồn kho. 
+                    <br/><span class="fw-bold text-danger">Mọi thao tác đều được lưu vết trong Nhật ký hệ thống (Audit Logs).</span>
+                </MudText>
+
+                <MudForm @ref="_bypassForm" @bind-IsValid="@_bypassFormIsValid">
+                    <MudTextField @bind-Value="_bypassReason" 
+                                  Label="Nhập lý do cưỡng chế Bypass (Bắt buộc)" 
+                                  Variant="Variant.Outlined" 
+                                  Required="true" 
+                                  RequiredError="Vui lòng nhập lý do giải trình phê duyệt!" 
+                                  Lines="3" 
+                                  Class="mb-6" />
+                </MudForm>
+
+                <div class="d-flex justify-end gap-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CloseBypassDialog" Class="rounded-lg">Hủy bỏ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Error" OnClick="SubmitBypass" Disabled="@(!_bypassFormIsValid || _bypassing)" Class="rounded-lg px-5">
+                        @if (_bypassing)
+                        {
+                            <MudProgressCircular Size="Size.Small" Indeterminate="true" Class="mr-2" />
+                            <span>Đang xử lý...</span>
+                        }
+                        else
+                        {
+                            <span>Xác Nhận Cưỡng Chế Giao</span>
+                        }
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</MudContainer>
+
+<style>
+    .custom-dialog-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1200;
+    }
+    .custom-dialog-box {
+        background-color: #ffffff;
+        width: 90%;
+        max-width: 550px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        border-top: 6px solid #d50000;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private bool _bypassing = false;
+    private List<SalesOrderDto> _orders = new();
+    private string _searchString = "";
+
+    // Bypass dialog state
+    private bool _showBypassDialog = false;
+    private SalesOrderDto? _bypassTarget;
+    private string _bypassReason = "";
+    private MudForm? _bypassForm;
+    private bool _bypassFormIsValid = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+
+    private async Task LoadOrders()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Http.GetFromJsonAsync<List<SalesOrderDto>>("api/salesorders");
+            _orders = result ?? new List<SalesOrderDto>();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải danh sách đơn hàng: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task OpenOrderDetail(SalesOrderDto order)
+    {
+        // Re-use existing dialog in RMA.Client
+        var parameters = new DialogParameters { ["Order"] = order };
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<SalesOrderDetailViewDialog>("Chi Tiết Đơn Hàng", parameters, options);
+    }
+
+    private void OpenBypassDialog(SalesOrderDto order)
+    {
+        _bypassTarget = order;
+        _bypassReason = "";
+        _showBypassDialog = true;
+    }
+
+    private void CloseBypassDialog()
+    {
+        _showBypassDialog = false;
+        _bypassTarget = null;
+    }
+
+    private async Task SubmitBypass()
+    {
+        if (_bypassForm != null) await _bypassForm.ValidateAsync();
+        if (!_bypassFormIsValid || _bypassTarget == null) return;
+
+        _bypassing = true;
+        try
+        {
+            var payload = new BypassDeliveryDto
+            {
+                OrderId = _bypassTarget.Id,
+                Reason = _bypassReason
+            };
+
+            var response = await Http.PostAsJsonAsync("api/admin/salesorders/bypass", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add($"Đã cưỡng chế xác nhận giao thành công cho đơn hàng {_bypassTarget.OrderCode}!", Severity.Success);
+                _showBypassDialog = false;
+                await LoadOrders();
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Không thể Bypass: {errorMsg}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi kết nối tới Server: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _bypassing = false;
+        }
+    }
+}

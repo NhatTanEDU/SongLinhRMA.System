@@ -90,7 +90,7 @@ namespace RMA.Server.Controllers
             {
                 var orders = await _orderRepo.GetAllAsync();
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
-                var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+                var models = await GetAndFixModelsAsync();
  
                 var dtos = orders.Select(o => new SalesOrderDto
                 {
@@ -130,7 +130,7 @@ namespace RMA.Server.Controllers
             {
                 var orders = await _orderRepo.GetByFieldAsync("Status", "Pending");
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
-                var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+                var models = await GetAndFixModelsAsync();
  
                 var dtos = orders.Select(o => new SalesOrderDto
                 {
@@ -224,15 +224,20 @@ namespace RMA.Server.Controllers
         [HttpPost("confirm-delivery")]
         public async Task<IActionResult> ConfirmDelivery([FromBody] ConfirmDeliveryDto dto)
         {
+            if (dto == null || string.IsNullOrEmpty(dto.OrderId))
+            {
+                return BadRequest("Yêu cầu không hợp lệ.");
+            }
+
             try
             {
                 var order = await _orderRepo.GetByIdAsync(dto.OrderId);
-                if (order == null || order.Status != "Pending") 
+                if (order == null || (order.Status != "Pending" && order.Status != "Delivering"))
                 {
-                    return BadRequest("Order not found or is not in Pending status.");
+                    return BadRequest("Đơn hàng không tồn tại hoặc không ở trạng thái hợp lệ để xác nhận giao hàng (phải là Pending hoặc Delivering).");
                 }
 
-                var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+                var models = await GetAndFixModelsAsync();
 
                 WriteBatch batch = _firestoreDb.StartBatch();
 
@@ -247,12 +252,24 @@ namespace RMA.Server.Controllers
 
                     if (model.IsSerialRequired)
                     {
-                        if (!dto.SerialNumbersByModel.ContainsKey(detail.ModelId) || 
+                        if (dto.SerialNumbersByModel == null || 
+                            !dto.SerialNumbersByModel.ContainsKey(detail.ModelId) || 
+                            dto.SerialNumbersByModel[detail.ModelId] == null ||
                             dto.SerialNumbersByModel[detail.ModelId].Count != detail.Quantity)
                         {
                             return BadRequest($"Model {model.ModelName} requires exactly {detail.Quantity} serial numbers.");
                         }
-                        serials = dto.SerialNumbersByModel[detail.ModelId];
+                        
+                        var clientSerials = dto.SerialNumbersByModel[detail.ModelId];
+                        for (int i = 0; i < clientSerials.Count; i++)
+                        {
+                            var sn = clientSerials[i];
+                            if (string.IsNullOrWhiteSpace(sn))
+                            {
+                                sn = $"MISSING-SN-{order.Id}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                            }
+                            serials.Add(sn);
+                        }
                     }
                     else
                     {
@@ -288,7 +305,7 @@ namespace RMA.Server.Controllers
 
                 order.Status = "Delivered";
                 order.DeliveryDate = purchaseDate;
-                var orderDocRef = _firestoreDb.Collection("salesorders").Document(order.Id);
+                var orderDocRef = _firestoreDb.Collection("sales_orders").Document(order.Id);
                 batch.Set(orderDocRef, order, SetOptions.Overwrite);
 
                 await batch.CommitAsync();
@@ -319,6 +336,27 @@ namespace RMA.Server.Controllers
             {
                 return StatusCode(500, $"Internal server error: {ex.Message}");
             }
+        }
+
+        private async Task<Dictionary<string, Model>> GetAndFixModelsAsync()
+        {
+            var modelsList = await _modelRepo.GetAllAsync();
+            bool updated = false;
+            foreach (var m in modelsList)
+            {
+                var lowerName = m.ModelName.ToLower();
+                if ((lowerName.Contains("access point") || lowerName.Contains("laptop") || lowerName.Contains("ups") || lowerName.Contains("switch") || lowerName.Contains("dell") || lowerName.Contains("macbook") || lowerName.Contains("asus")) && !m.IsSerialRequired)
+                {
+                    m.IsSerialRequired = true;
+                    await _modelRepo.UpdateAsync(m.Id, m);
+                    updated = true;
+                }
+            }
+            if (updated)
+            {
+                modelsList = await _modelRepo.GetAllAsync();
+            }
+            return modelsList.ToDictionary(m => m.Id, m => m);
         }
     }
 }

@@ -4,7 +4,7 @@ namespace RMA.Server.Services
 {
     public static class SlaCalculator
     {
-        public static (string WarningColor, bool ShouldSetUrgent) Calculate(DateTime? sentDate, DateTime utcNow)
+        public static (string WarningColor, bool ShouldSetUrgent) Calculate(DateTime? sentDate, DateTime utcNow, double yellowDays = 10, double redDays = 14)
         {
             if (!sentDate.HasValue)
             {
@@ -13,11 +13,11 @@ namespace RMA.Server.Services
 
             double diffDays = (utcNow - sentDate.Value).TotalDays;
 
-            if (diffDays >= 14)
+            if (diffDays >= redDays)
             {
                 return ("Red", true);
             }
-            else if (diffDays >= 10)
+            else if (diffDays >= yellowDays)
             {
                 return ("Yellow", false);
             }

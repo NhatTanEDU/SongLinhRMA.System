@@ -5,6 +5,8 @@
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
+@inject IJSRuntime JS
+@inject NavigationManager NavigationManager
 
 <PageTitle>Quản Lý Người Dùng & Phân Quyền - SOLICOM</PageTitle>
 
@@ -15,9 +17,18 @@
             <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">QUẢN LÝ NGƯỜI DÙNG & PHÂN QUYỀN</MudText>
             <MudText Typo="Typo.body2" Class="text-secondary">Thêm mới nhân viên, thay đổi vai trò (Roles) và quản lý trạng thái hoạt động tài khoản.</MudText>
         </div>
-        <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenAddUserDialog" Class="rounded-lg py-2.5 px-5 fw-bold">
-            Thêm Tài Khoản Mới
-        </MudButton>
+        <div class="d-flex flex-wrap gap-3">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.PersonAdd" OnClick="OpenAddUserDialog" Class="rounded-lg py-2.5 px-5 fw-bold">
+                Thêm Tài Khoản Mới
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" StartIcon="@Icons.Material.Filled.Backup" OnClick="ExecuteBackup" Class="rounded-lg py-2.5 px-5 fw-bold">
+                📦 Sao lưu Dữ liệu
+            </MudButton>
+            <InputFile id="restoreFileInput" OnChange="OnRestoreFileSelected" accept=".json" style="display:none;" />
+            <MudButton HtmlTag="label" for="restoreFileInput" Variant="Variant.Filled" Color="Color.Warning" StartIcon="@Icons.Material.Filled.CloudUpload" Class="rounded-lg py-2.5 px-5 fw-bold">
+                ☁️ Phục hồi Dữ liệu
+            </MudButton>
+        </div>
     </div>
 
     <!-- Main Grid -->
@@ -104,6 +115,14 @@
         }
     </MudPaper>
 </MudContainer>
+
+<!-- Loading Overlay for Backup/Restore -->
+<MudOverlay Visible="@_isBackupLoading" DarkBackground="true" Absolute="false" ZIndex="9999">
+    <div class="d-flex flex-column align-center text-white">
+        <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        <MudText Typo="Typo.h6" Class="mt-4 fw-bold">@_backupLoadingMessage</MudText>
+    </div>
+</MudOverlay>
 
 @code {
     private bool _loading = true;
@@ -262,6 +281,111 @@
             {
                 _loading = false;
             }
+        }
+    }
+
+    private bool _isBackupLoading = false;
+    private string _backupLoadingMessage = "Đang xử lý...";
+
+    private async Task ExecuteBackup()
+    {
+        _isBackupLoading = true;
+        _backupLoadingMessage = "Đang kết xuất dữ liệu Firestore...";
+        StateHasChanged();
+        try
+        {
+            var response = await Http.GetAsync("api/backup/export");
+            if (response.IsSuccessStatusCode)
+            {
+                var backupJson = await response.Content.ReadAsStringAsync();
+                
+                _backupLoadingMessage = "Đang mở cửa sổ File Explorer...";
+                StateHasChanged();
+                
+                var fileName = $"RMA_Backup_{DateTime.Now:yyyyMMdd_HHmmss}.json";
+                
+                var saveResult = await JS.InvokeAsync<bool?>("saveFileWithSystemAccess", fileName, backupJson);
+                
+                if (saveResult == true)
+                {
+                    Snackbar.Add("Sao lưu dữ liệu (Save As) thành công!", Severity.Success);
+                }
+                else if (saveResult == false)
+                {
+                    Snackbar.Add("Đã hủy sao lưu dữ liệu.", Severity.Info);
+                }
+                else
+                {
+                    _backupLoadingMessage = "Đang tải xuống thư mục Downloads (Trình duyệt cũ)...";
+                    StateHasChanged();
+                    await JS.InvokeVoidAsync("fileDownload.init", fileName, "application/json");
+                    
+                    var base64 = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(backupJson));
+                    int chunkSize = 20000;
+                    for (int i = 0; i < base64.Length; i += chunkSize)
+                    {
+                        var chunk = base64.Substring(i, Math.Min(chunkSize, base64.Length - i));
+                        await JS.InvokeVoidAsync("fileDownload.appendChunk", chunk);
+                    }
+                    await JS.InvokeVoidAsync("fileDownload.save");
+                    Snackbar.Add("Sao lưu thành công (Đã lưu vào thư mục Downloads)!", Severity.Success);
+                }
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Lấy dữ liệu sao lưu thất bại: {errorMsg}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi sao lưu: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isBackupLoading = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OnRestoreFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file == null) return;
+        
+        _isBackupLoading = true;
+        _backupLoadingMessage = $"Đang đọc file '{file.Name}' và khôi phục...";
+        StateHasChanged();
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            var fileStream = file.OpenReadStream(maxAllowedSize: 50 * 1024 * 1024);
+            var fileContent = new StreamContent(fileStream);
+            fileContent.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+            content.Add(fileContent, "file", file.Name);
+
+            var response = await Http.PostAsync("api/backup/import", content);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Khôi phục dữ liệu Firestore thành công! Đang làm mới toàn bộ trang...", Severity.Success);
+                StateHasChanged();
+                await Task.Delay(1500);
+                NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Khôi phục dữ liệu thất bại: {errorMsg}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi khôi phục: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isBackupLoading = false;
+            StateHasChanged();
         }
     }
 }

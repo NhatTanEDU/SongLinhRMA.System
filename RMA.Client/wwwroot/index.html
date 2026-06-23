@@ -64,6 +64,35 @@
                 this.chunks = []; // Clear reference to prevent memory leaks
             }
         };
+
+        window.saveFileWithSystemAccess = async function (fileName, jsonContent) {
+            if (typeof window.showSaveFilePicker !== 'function') {
+                console.warn("File System Access API is not supported in this browser. Falling back to default download.");
+                return null;
+            }
+            try {
+                const options = {
+                    suggestedName: fileName,
+                    types: [{
+                        description: 'JSON Backup Files',
+                        accept: {
+                            'application/json': ['.json'],
+                        },
+                    }],
+                };
+                const handle = await window.showSaveFilePicker(options);
+                const writable = await handle.createWritable();
+                await writable.write(jsonContent);
+                await writable.close();
+                return true;
+            } catch (err) {
+                console.error("showSaveFilePicker error:", err);
+                if (err.name === 'AbortError') {
+                    return false;
+                }
+                return null;
+            }
+        };
     </script>
 </body>
 

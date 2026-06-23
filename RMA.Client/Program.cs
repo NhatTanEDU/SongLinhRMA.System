@@ -15,9 +15,10 @@ builder.Services.AddBlazoredLocalStorage();
 builder.Services.AddTransient<JwtAuthorizationHandler>();
 
 // Register HttpClient using IHttpClientFactory with the JwtAuthorizationHandler message handler
+var apiBaseUrl = builder.Configuration["ApiBaseUrl"] ?? "http://API_IP_PLACEHOLDER";
 builder.Services.AddHttpClient("RMA.ServerAPI", client => 
 {
-    client.BaseAddress = new Uri("http://localhost:5299");
+    client.BaseAddress = new Uri(apiBaseUrl);
 })
 .AddHttpMessageHandler<JwtAuthorizationHandler>();
 

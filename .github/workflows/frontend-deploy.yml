@@ -26,6 +26,11 @@ jobs:
       - name: Publish Client App
         run: dotnet publish RMA.Client/RMA.Client.csproj -c Release -o release
 
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
       - name: Deploy to Firebase Hosting
         uses: FirebaseExtended/action-hosting-deploy@v0
         with:

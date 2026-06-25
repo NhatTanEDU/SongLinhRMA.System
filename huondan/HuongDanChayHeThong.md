@@ -24,7 +24,7 @@ cloudflared tunnel --url http://localhost:5299
 
 ### Bước 3: Cập nhật URL API mới vào Code
 * Mở file [appsettings.json](file:///media/tanma/40220E4A220E44FE/SongLinhRMA.System/RMA.Client/wwwroot/appsettings.json).
-* Dán link vừa copy vào giá trị của `"ApiBaseUrl"`.
+* Dán link vừa copy vào mục `"ApiBaseUrl"`.
 * *Ví dụ:* `"ApiBaseUrl": "https://xxxx.trycloudflare.com/"` (Lưu ý: Phải giữ dấu `/` ở cuối đường dẫn).
 
 ---

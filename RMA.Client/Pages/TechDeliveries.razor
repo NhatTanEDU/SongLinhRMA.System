@@ -110,7 +110,7 @@
         await LoadOrders();
 
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithUrl(new Uri(Http.BaseAddress!, "salesHub"))
             .WithAutomaticReconnect()
             .Build();
 
@@ -122,7 +122,14 @@
             });
         });
 
-        await _hubConnection.StartAsync();
+        try
+        {
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
     }
 
     /// <summary>

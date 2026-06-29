@@ -1,20 +1,25 @@
 # Stage 1: Build
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
-WORKDIR /app
+FROM mcr.microsoft.com/dotnet/sdk:10.0-alpine AS build
+WORKDIR /src
 
-# Copy project files and restore dependencies
+# Copy solution file and project files
 COPY RMASystem.slnx ./
 COPY RMA.Shared/RMA.Shared.csproj ./RMA.Shared/
 COPY RMA.Server/RMA.Server.csproj ./RMA.Server/
+
+# Restore dependencies
 RUN dotnet restore RMA.Server/RMA.Server.csproj
 
 # Copy source code and publish
 COPY RMA.Shared/ ./RMA.Shared/
 COPY RMA.Server/ ./RMA.Server/
-RUN dotnet publish RMA.Server/RMA.Server.csproj -c Release -o out
+RUN dotnet publish RMA.Server/RMA.Server.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore
 
 # Stage 2: Runtime
-FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-alpine
 WORKDIR /app
 
 # Install native dependencies for Tesseract OCR and general compatibility
@@ -27,7 +32,12 @@ RUN apk add --no-cache \
 ENV DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=false
 
 # Copy compiled files from build stage
-COPY --from=build-env /app/out .
+COPY --from=build /app/publish .
 
-EXPOSE 8080
+# Set dynamic port configuration (Render will override PORT)
+ENV PORT=8080
+ENV ASPNETCORE_URLS=http://+:$PORT
+
+EXPOSE $PORT
+
 ENTRYPOINT ["dotnet", "RMA.Server.dll"]

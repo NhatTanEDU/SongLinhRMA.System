@@ -255,32 +255,29 @@ namespace RMA.Server.Controllers
                     var model = models[detail.ModelId];
                     var serials = new List<string>();
 
-                    if (model.IsSerialRequired)
+                    // Read S/N from client for ALL products (both serial-required and non-required)
+                    if (dto.SerialNumbersByModel != null && 
+                        dto.SerialNumbersByModel.ContainsKey(detail.ModelId) && 
+                        dto.SerialNumbersByModel[detail.ModelId] != null &&
+                        dto.SerialNumbersByModel[detail.ModelId].Count == detail.Quantity)
                     {
-                        if (dto.SerialNumbersByModel == null || 
-                            !dto.SerialNumbersByModel.ContainsKey(detail.ModelId) || 
-                            dto.SerialNumbersByModel[detail.ModelId] == null ||
-                            dto.SerialNumbersByModel[detail.ModelId].Count != detail.Quantity)
-                        {
-                            return BadRequest($"Model {model.ModelName} requires exactly {detail.Quantity} serial numbers.");
-                        }
-                        
                         var clientSerials = dto.SerialNumbersByModel[detail.ModelId];
                         for (int i = 0; i < clientSerials.Count; i++)
                         {
                             var sn = clientSerials[i];
                             if (string.IsNullOrWhiteSpace(sn))
                             {
-                                sn = $"MISSING-SN-{order.Id}-{Guid.NewGuid().ToString().Substring(0, 8)}";
+                                sn = "KHÔNG CÓ S/N";
                             }
                             serials.Add(sn);
                         }
                     }
                     else
                     {
+                        // Fallback: no S/N data from client
                         for (int i = 0; i < detail.Quantity; i++)
                         {
-                            serials.Add($"SYS-{model.Id}-{order.Id}-{i}");
+                            serials.Add("KHÔNG CÓ S/N");
                         }
                     }
 

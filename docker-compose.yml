@@ -1,12 +1,19 @@
 services:
-  backend:
+  rmaserver:
+    image: songlinhrma-api:latest
     build:
       context: .
       dockerfile: RMA.Server/Dockerfile
+    container_name: rma_backend
+    restart: always
     ports:
-      - "80:8080"
-    volumes:
-      - ./RMA.Server/serviceAccountKey.json:/app/serviceAccountKey.json:ro
-    restart: unless-stopped
+      - "${PORT:-8080}:${PORT:-8080}"
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - PORT=${PORT:-8080}
+      - GOOGLE_APPLICATION_CREDENTIALS=${GOOGLE_APPLICATION_CREDENTIALS:-/app/config/firebase.json}
+    volumes:
+      # Mount file firebase credentials từ host vào container ở chế độ Read-Only
+      - ${FIREBASE_CREDENTIALS_HOST_PATH:-./RMA.Server/serviceAccountKey.json}:/app/config/firebase.json:ro
+      # Volume để lưu trữ logs từ ứng dụng ra máy host
+      - ${LOGS_HOST_PATH:-./logs}:/app/logs

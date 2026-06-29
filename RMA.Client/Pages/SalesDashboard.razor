@@ -261,7 +261,7 @@
         await LoadOrders();
 
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithUrl(new Uri(Http.BaseAddress!, "salesHub"))
             .WithAutomaticReconnect()
             .Build();
 
@@ -273,7 +273,14 @@
             });
         });
 
-        await _hubConnection.StartAsync();
+        try
+        {
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
     }
 
     private async Task LoadOrders()
@@ -324,16 +331,28 @@
     {
         try
         {
-            var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new();
-            
-            var localToday = DateTime.Today;
+            // Compute order stats directly from already-loaded _orders using local time
+            var localToday = DateTime.Now.Date;
             var todayOrdersCount = _orders.Count(o => o.OrderDate.ToLocalTime().Date == localToday);
             
-            var startOfWeek = localToday.AddDays(-(int)localToday.DayOfWeek + (int)DayOfWeek.Monday);
+            // Week starts on Monday
+            var daysToMonday = ((int)localToday.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+            var startOfWeek = localToday.AddDays(-daysToMonday);
             var weeklyOrdersCount = _orders.Count(o => o.OrderDate.ToLocalTime().Date >= startOfWeek);
 
-            var totalStock = models.Sum(m => m.StockQuantity);
             var deliveredCount = _orders.Count(o => o.Status == "Delivered");
+
+            // Fetch stock separately - don't let it block other stats
+            var totalStock = 0;
+            try
+            {
+                var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new();
+                totalStock = models.Sum(m => m.StockQuantity);
+            }
+            catch
+            {
+                // Stock fetch failed - show 0 but don't block other stats
+            }
 
             _stats = new DashboardStats
             {
@@ -345,6 +364,15 @@
         }
         catch (Exception ex)
         {
+            // Fallback: compute what we can without any API calls
+            var localToday = DateTime.Now.Date;
+            _stats = new DashboardStats
+            {
+                TodayOrders = _orders.Count(o => o.OrderDate.ToLocalTime().Date == localToday),
+                WeeklyOrders = _orders.Count,
+                TotalStock = 0,
+                DeliveredOrders = _orders.Count(o => o.Status == "Delivered")
+            };
             Console.WriteLine($"Error calculating stats: {ex.Message}");
         }
     }

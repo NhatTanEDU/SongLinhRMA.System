@@ -29,39 +29,40 @@
                     
                     @if (!detail.IsSerialRequired)
                     {
-                        <MudText Color="Color.Success">Hệ thống sẽ tự động sinh mã ảo - Bỏ qua nhập S/N</MudText>
+                        <MudText Typo="Typo.caption" Color="Color.Info" Class="mb-1">💡 Để trống nếu sản phẩm không có S/N</MudText>
                     }
-                    else
-                    {
+
+                    @{
                         if (!_scannedSerials.ContainsKey(detail.ModelId))
                         {
                             _scannedSerials[detail.ModelId] = new List<string>(new string[detail.Quantity]);
                         }
-
-                        <MudGrid>
-                            @for (int i = 0; i < detail.Quantity; i++)
-                            {
-                                int currentIndex = i;
-                                var refKey = $"{detail.ModelId}_{currentIndex}";
-                                <MudItem xs="12" sm="6" md="4">
-                                    <InputFile id="@($"ocr_{detail.ModelId}_{currentIndex}")" OnChange="@(e => UploadImageForOcr(e, detail.ModelId, currentIndex))" accept="image/*" style="display:none;" />
-                                    <MudTextField T="string"
-                                                   @ref="_serialRefs[refKey]"
-                                                   Value="@_scannedSerials[detail.ModelId][currentIndex]"
-                                                   ValueChanged="@(val => OnSerialChanged(val, detail.ModelId, currentIndex))"
-                                                   Label="@(IsScanning(detail.ModelId, currentIndex) ? $"S/N {currentIndex + 1} (Đang quét...)" : $"S/N {currentIndex + 1}")"
-                                                   Adornment="Adornment.End"
-                                                   AdornmentIcon="@(IsScanning(detail.ModelId, currentIndex) ? Icons.Material.Filled.Sync : Icons.Material.Filled.QrCodeScanner)"
-                                                   OnAdornmentClick="@(() => TriggerOcrScan(detail.ModelId, currentIndex))"
-                                                   OnKeyUp="@(e => HandleKeyUp(e, detail.ModelId, currentIndex))"
-                                                   Immediate="true"
-                                                   Variant="Variant.Outlined"
-                                                   Margin="Margin.Dense"
-                                                   Disabled="@IsScanning(detail.ModelId, currentIndex)" />
-                                </MudItem>
-                            }
-                        </MudGrid>
                     }
+
+                    <MudGrid>
+                        @for (int i = 0; i < detail.Quantity; i++)
+                        {
+                            int currentIndex = i;
+                            var refKey = $"{detail.ModelId}_{currentIndex}";
+                            <MudItem xs="12" sm="6" md="4">
+                                <InputFile id="@($"ocr_{detail.ModelId}_{currentIndex}")" OnChange="@(e => UploadImageForOcr(e, detail.ModelId, currentIndex))" accept="image/*" style="display:none;" />
+                                <MudTextField T="string"
+                                               @ref="_serialRefs[refKey]"
+                                               Value="@_scannedSerials[detail.ModelId][currentIndex]"
+                                               ValueChanged="@(val => OnSerialChanged(val, detail.ModelId, currentIndex))"
+                                               Label="@(IsScanning(detail.ModelId, currentIndex) ? $"S/N {currentIndex + 1} (Đang quét...)" : $"S/N {currentIndex + 1}")"
+                                               Placeholder="@(!detail.IsSerialRequired ? "Không bắt buộc" : "")"
+                                               Adornment="Adornment.End"
+                                               AdornmentIcon="@(IsScanning(detail.ModelId, currentIndex) ? Icons.Material.Filled.Sync : Icons.Material.Filled.QrCodeScanner)"
+                                               OnAdornmentClick="@(() => TriggerOcrScan(detail.ModelId, currentIndex))"
+                                               OnKeyUp="@(e => HandleKeyUp(e, detail.ModelId, currentIndex))"
+                                               Immediate="true"
+                                               Variant="Variant.Outlined"
+                                               Margin="Margin.Dense"
+                                               Disabled="@IsScanning(detail.ModelId, currentIndex)" />
+                            </MudItem>
+                        }
+                    </MudGrid>
                 </MudPaper>
             }
         </div>
@@ -87,8 +88,8 @@
     protected override void OnInitialized()
     {
         base.OnInitialized();
-        // Initialize the dictionary to hold empty strings for required serials
-        foreach (var detail in Order.Details.Where(d => d.IsSerialRequired))
+        // Initialize the dictionary for ALL products (not just IsSerialRequired)
+        foreach (var detail in Order.Details)
         {
             var list = new List<string>(detail.Quantity);
             for (int i = 0; i < detail.Quantity; i++) list.Add(string.Empty);

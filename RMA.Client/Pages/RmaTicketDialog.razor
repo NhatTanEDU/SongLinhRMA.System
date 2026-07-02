@@ -6,6 +6,7 @@
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject HttpClient Http
+@inject IJSRuntime JSRuntime
 
 <style>
     .rma-section {
@@ -61,6 +62,45 @@
         color: #fff; border-color: transparent;
         box-shadow: 0 2px 8px rgba(102,126,234,0.35);
     }
+    .device-passport-card {
+        border-radius: 12px;
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(0, 0, 0, 0.08);
+        background: #fdfdfd;
+        transition: all 0.25s ease;
+    }
+    .device-passport-card:hover {
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.05);
+    }
+    .device-passport-indicator {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 6px;
+        border-radius: 6px 0 0 6px;
+    }
+    .warranty-active-bar { background: linear-gradient(180deg, #2e7d32 0%, #4caf50 100%); }
+    .warranty-warning-bar { background: linear-gradient(180deg, #e65100 0%, #ff9800 100%); }
+    .warranty-expired-bar { background: linear-gradient(180deg, #b71c1c 0%, #f44336 100%); }
+    
+    .passport-grid {
+        padding: 16px 20px 16px 26px;
+    }
+    .passport-label {
+        font-size: 0.72rem;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        font-weight: 700;
+        margin-bottom: 2px;
+    }
+    .passport-value {
+        font-size: 0.88rem;
+        color: #1e293b;
+        font-weight: 600;
+    }
 </style>
 
 <MudDialog>
@@ -76,39 +116,47 @@
                             1. Thông Tin Định Danh (Identification)
                         </div>
                         <MudGrid>
-                            <!-- Khách hàng -->
+                            <!-- Serial Number (S/N) Lookup -->
                             <MudItem xs="12" md="6">
-                                <div class="d-flex align-end gap-2">
-                                    <MudSelect T="string" Label="Khách hàng *"
-                                               Value="@Ticket.CustomerId"
-                                               ValueChanged="@OnCustomerChanged"
-                                               Required="true" RequiredError="Vui lòng chọn khách hàng!"
-                                               Variant="Variant.Outlined" Class="flex-grow-1">
-                                        @foreach (var c in _customers)
+                                <div class="d-flex align-start gap-2">
+                                    <MudTextField @bind-Value="_searchSerial"
+                                                  Label="Nhập Serial Number (S/N) *"
+                                                  Variant="Variant.Outlined"
+                                                  Placeholder="VD: SN-123456..."
+                                                  Required="true" RequiredError="Vui lòng nhập S/N!"
+                                                  OnKeyDown="@(async (e) => { if (e.Key == "Enter") await SearchSerialNumber(); })"
+                                                  Adornment="Adornment.End"
+                                                  AdornmentIcon="@Icons.Material.Filled.CameraAlt"
+                                                  OnAdornmentClick="TriggerOcrScan"
+                                                  Class="flex-grow-1" />
+                                    <MudButton Variant="Variant.Filled"
+                                               Color="Color.Primary"
+                                               StartIcon="@Icons.Material.Filled.Search"
+                                               OnClick="SearchSerialNumber"
+                                               Disabled="_searchingSerial"
+                                               Style="height: 56px;"
+                                               Class="px-6">
+                                        @if (_searchingSerial)
                                         {
-                                            <MudSelectItem Value="@c.Id">@c.Name @(c.Phone != null ? $"({c.Phone})" : "")</MudSelectItem>
+                                            <MudProgressCircular Size="Size.Small" Indeterminate="true" />
                                         }
-                                    </MudSelect>
-                                    <MudTooltip Text="Thêm khách hàng mới">
-                                        <MudIconButton Icon="@Icons.Material.Filled.PersonAdd"
-                                                       Color="Color.Primary" Variant="Variant.Filled"
-                                                       OnClick="OpenAddCustomerDialog" />
-                                    </MudTooltip>
+                                        else
+                                        {
+                                            <span>Tìm</span>
+                                        }
+                                    </MudButton>
                                 </div>
-                                @if (!string.IsNullOrEmpty(Ticket.CustomerId))
+                                <InputFile id="ocrInput" OnChange="UploadImageForOcr" accept="image/*" style="display:none;" />
+                                
+                                @if (_ocrScanning)
                                 {
-                                    var selectedCust = _customers.FirstOrDefault(c => c.Id == Ticket.CustomerId);
-                                    @if (selectedCust != null && !string.IsNullOrEmpty(selectedCust.ContactPerson))
-                                    {
-                                        <div class="d-flex align-center gap-2 mt-1 ml-1" style="color:#5b5fc7;">
-                                            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" />
-                                            <MudText Typo="Typo.caption" Style="font-weight:600;">Đại diện: @selectedCust.ContactPerson</MudText>
-                                            @if (!string.IsNullOrEmpty(selectedCust.Phone))
-                                            {
-                                                <MudText Typo="Typo.caption"> — @selectedCust.Phone</MudText>
-                                            }
-                                        </div>
-                                    }
+                                    <div class="ocr-box mt-2">
+                                        <div class="scan-line"></div>
+                                        <MudProgressLinear Color="Color.Info" Indeterminate="true" Class="mb-2" />
+                                        <MudText Typo="Typo.caption" Color="Color.Info">
+                                            <b>🔍 Đang quét và phân tích Serial Number...</b>
+                                        </MudText>
+                                    </div>
                                 }
                             </MudItem>
 
@@ -123,81 +171,160 @@
                                               AdornmentIcon="@Icons.Material.Filled.Badge" />
                             </MudItem>
 
-                            <!-- Thiết bị -->
-                            <MudItem xs="12" md="6">
-                                <div class="d-flex align-end gap-2">
-                                    <MudSelect T="string" Label="Thiết bị (Model – S/N) *"
-                                               @bind-Value="Ticket.DeviceId"
-                                               Required="true" RequiredError="Vui lòng chọn thiết bị!"
-                                               Disabled="@string.IsNullOrEmpty(Ticket.CustomerId)"
-                                               Variant="Variant.Outlined" Class="flex-grow-1">
-                                        @foreach (var d in _filteredDevices)
-                                        {
-                                            <MudSelectItem Value="@d.Id">@d.SerialNumber – @d.ModelName</MudSelectItem>
-                                        }
-                                    </MudSelect>
-                                    <MudTooltip Text="Thêm nhanh thiết bị mới cho khách hàng này">
-                                        <MudIconButton Icon="@(_showAddDevice ? Icons.Material.Filled.Remove : Icons.Material.Filled.AddCircle)"
-                                                       Color="Color.Info" Variant="Variant.Filled"
-                                                       Disabled="@string.IsNullOrEmpty(Ticket.CustomerId)"
-                                                       OnClick="@(() => _showAddDevice = !_showAddDevice)" />
-                                    </MudTooltip>
-                                </div>
+                            <!-- Hiển thị kết quả tra cứu hoặc form thêm mới -->
+                            <MudItem xs="12">
+                                @if (_searchedDevice != null)
+                                {
+                                    <MudPaper Outlined="true" Elevation="1" Class="device-passport-card mt-2 mb-2">
+                                        <!-- Vertical left colored status bar -->
+                                        <div class="device-passport-indicator @GetWarrantyBarClass(_warrantyStatusColor)"></div>
+
+                                        <MudGrid Class="passport-grid align-center" Spacing="2">
+                                            <!-- Brand & Model Name -->
+                                            <MudItem xs="12" sm="6" md="4">
+                                                <div class="passport-label">Thiết bị / Sản phẩm</div>
+                                                <div class="passport-value d-flex align-center gap-1">
+                                                    <span style="font-weight: 700; color: #1e1b4b;">@_searchedDevice.Brand</span>
+                                                    <span style="color: #64748b;">•</span>
+                                                    <span style="font-weight: 500;">@_searchedDevice.ModelName</span>
+                                                </div>
+                                            </MudItem>
+
+                                            <!-- Customer -->
+                                            <MudItem xs="12" sm="6" md="4">
+                                                <div class="passport-label">Khách hàng sở hữu</div>
+                                                <div class="passport-value" style="font-weight: 600; color: #3b82f6;">
+                                                    @_searchedDevice.CustomerName
+                                                </div>
+                                            </MudItem>
+
+                                            <!-- Status -->
+                                            <MudItem xs="12" sm="6" md="4" Class="d-flex align-center justify-space-between">
+                                                <div>
+                                                    <div class="passport-label">Trạng thái bảo hành</div>
+                                                    <div class="passport-value">
+                                                        <span style="font-weight: 700; color: @GetWarrantyColorHex(_warrantyStatusColor)">
+                                                            @_warrantyStatus
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <MudTooltip Text="Chọn S/N khác">
+                                                    <MudIconButton Icon="@Icons.Material.Filled.Close" Color="Color.Error" Size="Size.Small" OnClick="ClearSearchedDevice" Class="mr-2" />
+                                                </MudTooltip>
+                                            </MudItem>
+
+                                            <!-- Purchase Date -->
+                                            <MudItem xs="6" sm="4" md="3">
+                                                <div class="passport-label">Ngày mua hàng</div>
+                                                <div class="passport-value">
+                                                    @(_searchedDevice.PurchaseDate?.ToString("dd/MM/yyyy") ?? "Chưa rõ")
+                                                </div>
+                                            </MudItem>
+
+                                            <!-- Expiry Date -->
+                                            <MudItem xs="6" sm="4" md="3">
+                                                <div class="passport-label">Ngày hết hạn</div>
+                                                <div class="passport-value">
+                                                    @(_searchedDevice.WarrantyExpiry?.ToString("dd/MM/yyyy") ?? "Chưa rõ")
+                                                </div>
+                                            </MudItem>
+
+                                            <!-- Order Code -->
+                                            <MudItem xs="6" sm="4" md="3">
+                                                <div class="passport-label">Mã đơn hàng</div>
+                                                <div class="passport-value">
+                                                    <span style="font-family: monospace; font-weight: bold; background: #e2e8f0; padding: 2px 6px; border-radius: 4px; font-size: 0.8rem;">
+                                                        @if (string.IsNullOrWhiteSpace(_searchedDevice.OrderCode))
+                                                        {
+                                                            <span style="color: #d32f2f;">Chưa có</span>
+                                                        }
+                                                        else
+                                                        {
+                                                            <span style="color: #0072BC;">@_searchedDevice.OrderCode</span>
+                                                        }
+                                                    </span>
+                                                </div>
+                                            </MudItem>
+
+                                            <!-- Online Lookup Link -->
+                                            <MudItem xs="6" sm="12" md="3" Class="d-flex align-center justify-end">
+                                                <a href="@GetWarrantyUrl()" target="_blank" class="brand-link" style="font-size: 0.85rem; font-weight: 600;">
+                                                    <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Style="font-size:1rem; margin-right: 4px;" />
+                                                    Tra cứu bảo hành hãng
+                                                </a>
+                                            </MudItem>
+                                        </MudGrid>
+                                    </MudPaper>
+                                }
+                                else if (_deviceNotFound)
+                                {
+                                    <MudAlert Severity="Severity.Warning" Variant="Variant.Filled" Class="mt-2">
+                                        <div class="d-flex align-center justify-space-between flex-wrap gap-2">
+                                            <MudText>Không tìm thấy S/N <b>@_searchSerial</b> trong hệ thống. Bạn có muốn thêm S/N này không?</MudText>
+                                            <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Add" OnClick="PrepareAddDevice">
+                                                Có, Thêm Thiết Bị Mới
+                                            </MudButton>
+                                        </div>
+                                    </MudAlert>
+                                }
 
                                 @if (_showAddDevice)
                                 {
-                                    <MudCard Elevation="2" Class="mt-3 pa-3" Style="border-left: 3px solid #29b6f6;">
-                                        <MudText Typo="Typo.subtitle2" Color="Color.Info"><b>+ Thêm Thiết Bị Nhanh</b></MudText>
-                                        <div class="d-flex align-center gap-2 mt-2">
-                                            <MudSelect T="string" Label="Model thiết bị *" @bind-Value="_newDeviceModelId"
-                                                       Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1" Style="margin-top: 0;">
-                                                @foreach (var m in _models)
-                                                {
-                                                    <MudSelectItem Value="@m.Id">@m.ModelName (@m.Brand)</MudSelectItem>
-                                                }
-                                            </MudSelect>
-                                            <MudTooltip Text="Thêm dòng máy (Model) mới">
-                                                <MudIconButton Icon="@Icons.Material.Filled.Add"
-                                                               Color="Color.Primary" Variant="Variant.Filled"
-                                                               Size="Size.Medium" Style="height: 40px; width: 40px;"
-                                                               OnClick="OpenAddModelDialog" />
-                                            </MudTooltip>
-                                        </div>
-                                        <div class="d-flex align-end gap-2 mt-1">
-                                            <MudTextField @bind-Value="_newDeviceSerial"
-                                                          Label="Serial Number (S/N) *"
-                                                          Variant="Variant.Outlined" Margin="Margin.Dense"
-                                                          Class="flex-grow-1"
-                                                          HelperText="Nhập tay hoặc dùng Quét OCR bên dưới" />
-                                        </div>
-
-                                        <!-- OCR Scan Button -->
-                                        <div class="mt-2">
-                                            <InputFile id="ocrInput" OnChange="UploadImageForOcr" accept="image/*" style="display:none;" />
-                                            @if (!_ocrScanning)
-                                            {
-                                                <div class="w-100">
-                                                    <MudButton HtmlTag="label" for="ocrInput" Variant="Variant.Outlined" Color="Color.Info" FullWidth="true"
-                                                               StartIcon="@Icons.Material.Filled.QrCodeScanner">
-                                                        📷 Upload Ảnh Mã Vạch để Quét OCR
-                                                    </MudButton>
+                                    <MudCard Elevation="2" Class="mt-3 pa-4" Style="border-left: 4px solid #29b6f6; background-color: #f7fcfe;">
+                                        <MudText Typo="Typo.subtitle2" Color="Color.Info" Class="mb-3">
+                                            <b>📝 THÊM MỚI THIẾT BỊ VÀO HỆ THỐNG</b>
+                                        </MudText>
+                                        <MudGrid>
+                                            <!-- Model -->
+                                            <MudItem xs="12" md="6">
+                                                <div class="d-flex align-end gap-2">
+                                                    <MudSelect T="string" Label="Dòng sản phẩm (Model) *" @bind-Value="_newDeviceModelId"
+                                                               Variant="Variant.Outlined" Required="true" RequiredError="Vui lòng chọn Model!">
+                                                        @foreach (var m in _models)
+                                                        {
+                                                            <MudSelectItem Value="@m.Id">@m.ModelName (@m.Brand)</MudSelectItem>
+                                                        }
+                                                    </MudSelect>
+                                                    <MudTooltip Text="Thêm dòng máy mới">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled" OnClick="OpenAddModelDialog" Style="height: 56px;" />
+                                                    </MudTooltip>
                                                 </div>
-                                            }
-                                            else
-                                            {
-                                                <div class="ocr-box">
-                                                    <div class="scan-line"></div>
-                                                    <MudProgressLinear Color="Color.Info" Indeterminate="true" Class="mb-2" />
-                                                    <MudText Typo="Typo.caption" Color="Color.Info">
-                                                        <b>🔍 Đang nhận diện mã vạch và trích xuất Serial Number...</b>
-                                                    </MudText>
-                                                </div>
-                                            }
-                                        </div>
+                                            </MudItem>
 
-                                        <div class="d-flex justify-end gap-2 mt-2">
-                                            <MudButton Size="Size.Small" OnClick="@(() => _showAddDevice = false)">Hủy</MudButton>
-                                            <MudButton Variant="Variant.Filled" Color="Color.Info" Size="Size.Small" OnClick="SaveDevice">Lưu thiết bị</MudButton>
+                                            <!-- Customer -->
+                                            <MudItem xs="12" md="6">
+                                                <div class="d-flex align-end gap-2">
+                                                    <MudSelect T="string" Label="Khách hàng sở hữu *" @bind-Value="Ticket.CustomerId"
+                                                               Variant="Variant.Outlined" Required="true" RequiredError="Vui lòng chọn khách hàng!">
+                                                        @foreach (var c in _customers)
+                                                        {
+                                                            <MudSelectItem Value="@c.Id">@c.Name @(c.Phone != null ? $"({c.Phone})" : "")</MudSelectItem>
+                                                        }
+                                                    </MudSelect>
+                                                    <MudTooltip Text="Thêm khách hàng mới">
+                                                        <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary" Variant="Variant.Filled" OnClick="OpenAddCustomerDialog" Style="height: 56px;" />
+                                                    </MudTooltip>
+                                                </div>
+                                            </MudItem>
+
+                                            <!-- S/N -->
+                                            <MudItem xs="12" md="4">
+                                                <MudTextField @bind-Value="_newDeviceSerial" Label="Số Sê-ri (S/N) *" Variant="Variant.Outlined" Disabled="true" />
+                                            </MudItem>
+
+                                            <!-- Dates -->
+                                            <MudItem xs="12" md="4">
+                                                <MudDatePicker Label="Ngày giao hàng / mua *" @bind-Date="_newDevicePurchaseDate" Variant="Variant.Outlined" Required="true" />
+                                            </MudItem>
+                                            <MudItem xs="12" md="4">
+                                                <MudDatePicker Label="Ngày hết hạn bảo hành *" @bind-Date="_newDeviceWarrantyExpiry" Variant="Variant.Outlined" Required="true" />
+                                            </MudItem>
+                                        </MudGrid>
+                                        <div class="d-flex justify-end gap-2 mt-4">
+                                            <MudButton OnClick="CancelAddDevice">Hủy</MudButton>
+                                            <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Save" OnClick="SaveDevice">
+                                                Lưu Thiết Bị & Chọn
+                                            </MudButton>
                                         </div>
                                     </MudCard>
                                 }
@@ -228,33 +355,8 @@
                             2. Tình Trạng & Phụ Kiện (Condition & Accessories)
                         </div>
                         <MudGrid>
-                            <!-- Bảo hành -->
-                            <MudItem xs="12" md="5">
-                                <div class="d-flex align-center gap-3">
-                                    <MudSwitch T="bool" @bind-Value="_warrantyActive" Color="Color.Success" />
-                                    <MudChip T="string" Color="@(_warrantyActive ? Color.Success : Color.Warning)" Size="Size.Small">
-                                        @(_warrantyActive ? "✅ Còn Bảo Hành Hãng" : "❌ Hết Bảo Hành Hãng")
-                                    </MudChip>
-                                </div>
-                                <div class="warranty-box @(_warrantyActive ? "warranty-ok" : "warranty-exp")">
-                                    @if (_warrantyActive)
-                                    {
-                                        <a href="@GetWarrantyUrl()" target="_blank" class="brand-link">
-                                            <MudIcon Icon="@Icons.Material.Filled.OpenInNew" Style="font-size:0.95rem;" />
-                                            Tra cứu bảo hành @_deviceBrand trực tuyến
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <MudText Typo="Typo.caption" Color="Color.Warning">
-                                            ⚠️ Hết hạn bảo hành — Đề xuất: <b>Gói sửa chữa dịch vụ ngoài Song Linh RMA</b>
-                                        </MudText>
-                                    }
-                                </div>
-                            </MudItem>
-
-                            <!-- Mô tả lỗi -->
-                            <MudItem xs="12" md="7">
+                            <!-- Mô tả lỗi (Full width) -->
+                            <MudItem xs="12">
                                 <MudTextField @bind-Value="Ticket.ProblemDescription"
                                               Label="Mô tả lỗi (Fault Description) *"
                                               Lines="3" Variant="Variant.Outlined"
@@ -431,6 +533,16 @@
     string _newDeviceSerial = "";
     bool _ocrScanning;
     private Dictionary<string, string> _pendingDeviceCustomerUpdates = new();
+    
+    // New search state
+    string _searchSerial = "";
+    bool _searchingSerial = false;
+    DeviceDto? _searchedDevice = null;
+    string _warrantyStatus = "";
+    string _warrantyStatusColor = "";
+    bool _deviceNotFound = false;
+    DateTime? _newDevicePurchaseDate = DateTime.Today;
+    DateTime? _newDeviceWarrantyExpiry = DateTime.Today.AddYears(1);
 
     // Khối 2 state
     bool _warrantyActive = true;
@@ -461,6 +573,18 @@
             _filteredDevices = _allDevices.Where(d => d.CustomerId == Ticket.CustomerId).ToList();
 
         if (Ticket.SentDate.HasValue) _sentDate = Ticket.SentDate.Value;
+
+        // If editing a ticket that already has a device serial
+        if (!string.IsNullOrEmpty(Ticket.DeviceSerialNumber))
+        {
+            _searchSerial = Ticket.DeviceSerialNumber;
+            var matchedDev = _allDevices.FirstOrDefault(d => d.SerialNumber.Equals(Ticket.DeviceSerialNumber, StringComparison.OrdinalIgnoreCase));
+            if (matchedDev != null)
+            {
+                _searchedDevice = matchedDev;
+                CalculateWarrantyStatus(matchedDev.WarrantyExpiry);
+            }
+        }
     }
 
     void OnCustomerChanged(string id)
@@ -503,6 +627,11 @@
 
     void UpdateBrand()
     {
+        if (_searchedDevice != null && Ticket.DeviceId == _searchedDevice.Id)
+        {
+            _deviceBrand = _searchedDevice.Brand ?? "Hãng";
+            return;
+        }
         var dev = _allDevices.FirstOrDefault(d => d.Id == Ticket.DeviceId);
         _deviceBrand = dev?.Brand ?? "Hãng";
     }
@@ -517,6 +646,22 @@
             "asus"  => "https://www.asus.com/vn/support/warranty-status-inquiry/",
             "hp"    => "https://support.hp.com/vn-vi/check-warranty",
             _       => $"https://www.google.com/search?q=tra+cuu+bao+hanh+{Uri.EscapeDataString(_deviceBrand)}"
+        };
+    }
+
+    async Task TriggerOcrScan()
+    {
+        await JSRuntime.InvokeVoidAsync("eval", "document.getElementById('ocrInput').click()");
+    }
+
+    string GetWarrantyBarClass(string statusColor)
+    {
+        return statusColor switch
+        {
+            "success" => "warranty-active-bar",
+            "warning" => "warranty-warning-bar",
+            "error" => "warranty-expired-bar",
+            _ => "warranty-expired-bar"
         };
     }
 
@@ -558,8 +703,9 @@
                 var result = await response.Content.ReadFromJsonAsync<OcrResponseDto>();
                 if (result != null && !string.IsNullOrEmpty(result.SerialNumber))
                 {
-                    _newDeviceSerial = result.SerialNumber;
-                    Snackbar.Add($"✅ OCR thành công! S/N: {_newDeviceSerial}", Severity.Success);
+                    _searchSerial = result.SerialNumber;
+                    Snackbar.Add($"✅ OCR thành công! S/N: {_searchSerial}", Severity.Success);
+                    await SearchSerialNumber();
                 }
                 else
                 {
@@ -595,27 +741,195 @@
         }
     }
 
+    async Task SearchSerialNumber()
+    {
+        if (string.IsNullOrWhiteSpace(_searchSerial))
+        {
+            Snackbar.Add("Vui lòng nhập Serial Number!", Severity.Warning);
+            return;
+        }
+
+        _searchingSerial = true;
+        _searchedDevice = null;
+        _deviceNotFound = false;
+        _showAddDevice = false;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.GetAsync($"api/devices/by-serial/{Uri.EscapeDataString(_searchSerial.Trim())}");
+            if (response.IsSuccessStatusCode)
+            {
+                var device = await response.Content.ReadFromJsonAsync<DeviceDto>();
+                if (device != null)
+                {
+                    _searchedDevice = device;
+                    Ticket.DeviceId = device.Id;
+                    Ticket.DeviceSerialNumber = device.SerialNumber;
+                    Ticket.DeviceModelName = device.ModelName;
+                    Ticket.CustomerId = device.CustomerId;
+                    Ticket.DeviceWarrantyExpiry = device.WarrantyExpiry;
+                    CalculateWarrantyStatus(device.WarrantyExpiry);
+                    
+                    _filteredDevices = _allDevices.Where(d => d.CustomerId == Ticket.CustomerId).ToList();
+                    UpdateBrand();
+                    Snackbar.Add($"✅ Tìm thấy thiết bị S/N: {device.SerialNumber}", Severity.Success);
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                _deviceNotFound = true;
+                Snackbar.Add("Không tìm thấy S/N trong hệ thống.", Severity.Warning);
+            }
+            else
+            {
+                Snackbar.Add("Có lỗi xảy ra khi tìm kiếm thiết bị.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi kết nối: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _searchingSerial = false;
+            StateHasChanged();
+        }
+    }
+
+    void CalculateWarrantyStatus(DateTime? expiry)
+    {
+        if (!expiry.HasValue)
+        {
+            _warrantyStatus = "Không rõ hạn bảo hành";
+            _warrantyStatusColor = "grey";
+            _warrantyActive = false;
+            Ticket.ServiceMode = "Sửa chữa";
+            return;
+        }
+
+        var today = DateTime.Today;
+        var expiryDate = expiry.Value.Date;
+
+        if (expiryDate < today)
+        {
+            _warrantyStatus = "Hết bảo hành";
+            _warrantyStatusColor = "error";
+            _warrantyActive = false;
+            Ticket.ServiceMode = "Sửa chữa";
+        }
+        else if ((expiryDate - today).TotalDays <= 7)
+        {
+            _warrantyStatus = "Sắp hết bảo hành (<= 7 ngày)";
+            _warrantyStatusColor = "warning";
+            _warrantyActive = true;
+            Ticket.ServiceMode = "Bảo hành";
+        }
+        else
+        {
+            _warrantyStatus = "Còn bảo hành";
+            _warrantyStatusColor = "success";
+            _warrantyActive = true;
+            Ticket.ServiceMode = "Bảo hành";
+        }
+    }
+
+    void ClearSearchedDevice()
+    {
+        _searchedDevice = null;
+        Ticket.DeviceId = "";
+        Ticket.DeviceSerialNumber = "";
+        Ticket.DeviceModelName = "";
+        StateHasChanged();
+    }
+
+    void PrepareAddDevice()
+    {
+        _showAddDevice = true;
+        _newDeviceSerial = _searchSerial.Trim();
+        _newDeviceModelId = "";
+        _newDevicePurchaseDate = DateTime.Today;
+        _newDeviceWarrantyExpiry = DateTime.Today.AddYears(1);
+        _deviceNotFound = false;
+        StateHasChanged();
+    }
+
+    void CancelAddDevice()
+    {
+        _showAddDevice = false;
+        _deviceNotFound = true;
+        StateHasChanged();
+    }
+
+    Severity GetSeverityForWarrantyColor(string color)
+    {
+        return color switch
+        {
+            "success" => Severity.Success,
+            "warning" => Severity.Warning,
+            "error" => Severity.Error,
+            _ => Severity.Normal
+        };
+    }
+
+    string GetWarrantyColorHex(string color)
+    {
+        return color switch
+        {
+            "success" => "#2e7d32",
+            "warning" => "#b57c00",
+            "error" => "#c62828",
+            _ => "#475569"
+        };
+    }
+
     async Task SaveDevice()
     {
         if (string.IsNullOrWhiteSpace(_newDeviceModelId) || string.IsNullOrWhiteSpace(_newDeviceSerial))
-        { Snackbar.Add("Vui lòng chọn model và nhập Serial!", Severity.Warning); return; }
+        { 
+            Snackbar.Add("Vui lòng chọn model thiết bị!", Severity.Warning); 
+            return; 
+        }
+        if (string.IsNullOrWhiteSpace(Ticket.CustomerId))
+        {
+            Snackbar.Add("Vui lòng chọn khách hàng sở hữu!", Severity.Warning);
+            return;
+        }
 
         var dto = new DeviceCreateDto
         {
             CustomerId   = Ticket.CustomerId,
             ModelId      = _newDeviceModelId,
             SerialNumber = _newDeviceSerial,
-            PurchaseDate = DateTime.UtcNow.AddYears(-1)
+            PurchaseDate = _newDevicePurchaseDate,
+            WarrantyExpiry = _newDeviceWarrantyExpiry
         };
         var added = await DeviceService.CreateDeviceAsync(dto);
         if (added != null)
         {
-            Snackbar.Add($"Đã thêm thiết bị S/N: {added.SerialNumber}", Severity.Success);
+            Snackbar.Add($"✅ Đã thêm thiết bị S/N: {added.SerialNumber}", Severity.Success);
             _allDevices      = await DeviceService.GetDevicesAsync();
             _filteredDevices = _allDevices.Where(d => d.CustomerId == Ticket.CustomerId).ToList();
             Ticket.DeviceId  = added.Id;
+            Ticket.DeviceSerialNumber = added.SerialNumber;
+            Ticket.DeviceModelName = _models.FirstOrDefault(m => m.Id == added.ModelId)?.ModelName ?? "";
+            
+            _searchedDevice = new DeviceDto
+            {
+                Id = added.Id,
+                SerialNumber = added.SerialNumber,
+                CustomerId = added.CustomerId,
+                CustomerName = _customers.FirstOrDefault(c => c.Id == added.CustomerId)?.Name ?? "",
+                ModelId = added.ModelId,
+                ModelName = Ticket.DeviceModelName,
+                Brand = _models.FirstOrDefault(m => m.Id == added.ModelId)?.Brand ?? "",
+                PurchaseDate = added.PurchaseDate,
+                WarrantyExpiry = added.WarrantyExpiry
+            };
+            CalculateWarrantyStatus(added.WarrantyExpiry);
+
             UpdateBrand();
-            _newDeviceModelId = ""; _newDeviceSerial = ""; _showAddDevice = false;
+            _newDeviceModelId = ""; _newDeviceSerial = ""; _showAddDevice = false; _deviceNotFound = false;
         }
     }
 

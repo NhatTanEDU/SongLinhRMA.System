@@ -12,7 +12,10 @@
 <MudPaper Class="pa-4">
     <MudGrid>
         <MudItem xs="12" md="6">
-            <MudSelect T="string" Label="Khách Hàng" @bind-Value="createDto.CustomerId" Required="true">
+            <MudTextField @bind-Value="createDto.OrderCode" Label="Số Đơn Hàng" HelperText="VD: 026, 029... (Bỏ trống để tự sinh)" Variant="Variant.Outlined" />
+        </MudItem>
+        <MudItem xs="12" md="6">
+            <MudSelect T="string" Label="Khách Hàng" @bind-Value="createDto.CustomerId" Required="true" Variant="Variant.Outlined">
                 @foreach (var c in customers)
                 {
                     <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>

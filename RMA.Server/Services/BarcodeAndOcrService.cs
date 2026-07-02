@@ -76,7 +76,15 @@ public class BarcodeAndOcrService : IOcrService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "[TIER 2 FAILED] Tesseract OCR failed (possibly due to missing eng.traineddata file or native library). Fallback to next tier...");
+                var isDllMissing = ex.ToString().Contains("DllNotFoundException") || ex.InnerException is DllNotFoundException;
+                if (isDllMissing)
+                {
+                    _logger.LogWarning("[TIER 2 SKIP] Thư viện native Tesseract/Leptonica chưa được cài đặt trên hệ thống Linux này. Để kích hoạt OCR cục bộ, vui lòng cài đặt bằng lệnh: 'sudo apt-get install -y tesseract-ocr libleptonica-dev'. Đang chuyển sang TIER tiếp theo...");
+                }
+                else
+                {
+                    _logger.LogWarning("[TIER 2 FAILED] Tesseract OCR thất bại: {msg}. Đang chuyển sang TIER tiếp theo...", ex.Message);
+                }
             }
 
             // ==========================================

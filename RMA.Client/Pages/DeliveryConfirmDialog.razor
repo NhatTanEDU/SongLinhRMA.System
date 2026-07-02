@@ -8,8 +8,19 @@
 
 <MudDialog>
     <DialogContent>
-        <div class="d-flex flex-column gap-3">
-            <MudText Typo="Typo.h6">Mã đơn: @Order.OrderCode</MudText>
+        <MudForm @ref="_form">
+            <div class="d-flex flex-column gap-3">
+            <MudText Typo="Typo.h6">
+                Mã đơn: 
+                @if (string.IsNullOrWhiteSpace(Order.OrderCode))
+                {
+                    <span style="color: #d32f2f; font-weight: bold;">Chưa có</span>
+                }
+                else
+                {
+                    <span>@Order.OrderCode</span>
+                }
+            </MudText>
             <MudText Typo="Typo.subtitle1">Khách hàng: @Order.CustomerName</MudText>
             
             @if (!string.IsNullOrWhiteSpace(Order.SalesNote))
@@ -50,6 +61,7 @@
                                                @ref="_serialRefs[refKey]"
                                                Value="@_scannedSerials[detail.ModelId][currentIndex]"
                                                ValueChanged="@(val => OnSerialChanged(val, detail.ModelId, currentIndex))"
+                                               Validation="@(new Func<string, string?>(value => ValidateSnInForm(value, detail.ModelId, currentIndex)))"
                                                Label="@(IsScanning(detail.ModelId, currentIndex) ? $"S/N {currentIndex + 1} (Đang quét...)" : $"S/N {currentIndex + 1}")"
                                                Placeholder="@(!detail.IsSerialRequired ? "Không bắt buộc" : "")"
                                                Adornment="Adornment.End"
@@ -65,7 +77,8 @@
                     </MudGrid>
                 </MudPaper>
             }
-        </div>
+            </div>
+        </MudForm>
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="Cancel">Hủy</MudButton>
@@ -77,6 +90,7 @@
     [CascadingParameter] IMudDialogInstance MudDialog { get; set; } = null!;
     [Parameter] public SalesOrderDto Order { get; set; } = new();
 
+    private MudForm _form = null!;
     private Dictionary<string, MudTextField<string>> _serialRefs = new();
     private Dictionary<string, List<string>> _scannedSerials = new();
     
@@ -95,6 +109,33 @@
             for (int i = 0; i < detail.Quantity; i++) list.Add(string.Empty);
             _scannedSerials[detail.ModelId] = list;
         }
+    }
+
+    private bool IsDuplicateInForm(string serial, string modelId, int index)
+    {
+        if (string.IsNullOrWhiteSpace(serial)) return false;
+        var normalized = serial.Trim().ToUpper();
+        if (normalized == "KHÔNG CÓ S/N") return false;
+
+        foreach (var kvp in _scannedSerials)
+        {
+            for (int i = 0; i < kvp.Value.Count; i++)
+            {
+                if (kvp.Key == modelId && i == index) continue;
+                var s = kvp.Value[i] ?? string.Empty;
+                if (s.Trim().ToUpper() == normalized) return true;
+            }
+        }
+        return false;
+    }
+
+    private string? ValidateSnInForm(string value, string modelId, int index)
+    {
+        if (IsDuplicateInForm(value, modelId, index))
+        {
+            return "Số S/N này đã bị trùng lặp trong danh sách!";
+        }
+        return null;
     }
 
     private void OnSerialChanged(string val, string modelId, int index)
@@ -145,8 +186,15 @@
                 if (result != null && !string.IsNullOrEmpty(result.SerialNumber))
                 {
                     _scannedSerials[modelId][index] = result.SerialNumber;
-                    Snackbar.Add($"✅ OCR thành công! S/N: {result.SerialNumber}", Severity.Success);
-                    await FocusNextInput(modelId, index);
+                    if (IsDuplicateInForm(result.SerialNumber, modelId, index))
+                    {
+                        Snackbar.Add($"⚠️ OCR nhận diện được S/N: {result.SerialNumber} nhưng số S/N này bị trùng lặp (được đánh dấu đỏ)!", Severity.Warning);
+                    }
+                    else
+                    {
+                        Snackbar.Add($"✅ OCR thành công! S/N: {result.SerialNumber}", Severity.Success);
+                        await FocusNextInput(modelId, index);
+                    }
                 }
                 else
                 {
@@ -218,11 +266,45 @@
     private async Task Confirm()
     {
         if (_isSubmitting) return;
+        
+        if (_form != null)
+        {
+            await _form.ValidateAsync();
+            if (!_form.IsValid)
+            {
+                Snackbar.Add("Không thể xác nhận giao hàng! Vui lòng sửa lại các số S/N bị trùng lặp hoặc thiếu (được đánh dấu đỏ).", Severity.Error);
+                return;
+            }
+        }
+
         _isSubmitting = true;
         StateHasChanged();
 
         try
         {
+            bool hasDuplicate = false;
+            foreach (var kvp in _scannedSerials)
+            {
+                for (int i = 0; i < kvp.Value.Count; i++)
+                {
+                    var s = kvp.Value[i];
+                    if (IsDuplicateInForm(s, kvp.Key, i))
+                    {
+                        hasDuplicate = true;
+                        break;
+                    }
+                }
+                if (hasDuplicate) break;
+            }
+
+            if (hasDuplicate)
+            {
+                Snackbar.Add("Không thể xác nhận giao hàng! Vui lòng sửa lại các số S/N bị trùng lặp (được đánh dấu đỏ).", Severity.Error);
+                _isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+
             var dto = new ConfirmDeliveryDto
             {
                 OrderId = Order.Id,

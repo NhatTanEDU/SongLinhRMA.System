@@ -63,7 +63,18 @@
                     <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, tên khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
                 </ToolBarContent>
                 <Columns>
-                    <PropertyColumn Property="x => x.OrderCode" Title="Mã Đơn" CellStyle="font-weight: bold; color: #2C3E50;" />
+                    <TemplateColumn Title="Mã Đơn">
+                        <CellTemplate>
+                            @if (string.IsNullOrWhiteSpace(context.Item.OrderCode))
+                            {
+                                <span style="font-weight: bold; color: #d32f2f;">Chưa có</span>
+                            }
+                            else
+                            {
+                                <span style="font-weight: bold; color: #2C3E50;">@context.Item.OrderCode</span>
+                            }
+                        </CellTemplate>
+                    </TemplateColumn>
                     <PropertyColumn Property="x => x.CustomerName" Title="Khách Hàng" />
                     <TemplateColumn Title="Ngày Tạo Đơn">
                         <CellTemplate>
@@ -127,7 +138,7 @@
                     CƯỠNG CHẾ XÁC NHẬN GIAO HÀNG
                 </MudText>
                 <MudText Typo="Typo.body2" Class="text-secondary mb-4">
-                    Thao tác này sẽ đổi trạng thái đơn hàng <strong>@_bypassTarget?.OrderCode</strong> sang <strong>Đã Giao</strong>, tự động cấp mã S/N giả lập cho thiết bị và giảm số lượng tồn kho. 
+                    Thao tác này sẽ đổi trạng thái đơn hàng <strong>@((string.IsNullOrEmpty(_bypassTarget?.OrderCode)) ? "Chưa có mã" : _bypassTarget.OrderCode)</strong> sang <strong>Đã Giao</strong>, tự động cấp mã S/N giả lập cho thiết bị và giảm số lượng tồn kho. 
                     <br/><span class="fw-bold text-danger">Mọi thao tác đều được lưu vết trong Nhật ký hệ thống (Audit Logs).</span>
                 </MudText>
 
@@ -256,7 +267,7 @@
             var response = await Http.PostAsJsonAsync("api/admin/salesorders/bypass", payload);
             if (response.IsSuccessStatusCode)
             {
-                Snackbar.Add($"Đã cưỡng chế xác nhận giao thành công cho đơn hàng {_bypassTarget.OrderCode}!", Severity.Success);
+                Snackbar.Add($"Đã cưỡng chế xác nhận giao thành công cho đơn hàng {(_bypassTarget.OrderCode ?? "Chưa có mã")}!", Severity.Success);
                 _showBypassDialog = false;
                 await LoadOrders();
             }

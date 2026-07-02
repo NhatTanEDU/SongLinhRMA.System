@@ -33,5 +33,8 @@ namespace RMA.Server.Entities
 
         [FirestoreProperty]
         public string? OrderId { get; set; }
+
+        [FirestoreProperty]
+        public string? OrderCode { get; set; }
     }
 }

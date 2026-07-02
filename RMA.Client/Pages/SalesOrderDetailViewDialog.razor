@@ -12,7 +12,23 @@
             </MudItem>
             <MudItem xs="12" sm="6">
                 <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Mã Đơn Hàng</MudText>
-                <MudText Typo="Typo.body1" Class="fw-bold" Style="color: #0072BC;">@Order.OrderCode</MudText>
+                @if (_isEditing)
+                {
+                    <MudTextField @bind-Value="_editOrderCode" Label="Mã đơn hàng" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.body1" Class="fw-bold">
+                        @if (string.IsNullOrWhiteSpace(Order.OrderCode))
+                        {
+                            <span style="color: #d32f2f;">Chưa có</span>
+                        }
+                        else
+                        {
+                            <span style="color: #0072BC;">@Order.OrderCode</span>
+                        }
+                    </MudText>
+                }
             </MudItem>
 
             <MudItem xs="12" sm="6">
@@ -37,7 +53,14 @@
             </MudItem>
             <MudItem xs="12" sm="6">
                 <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ghi Chú Đơn Hàng</MudText>
-                <MudText Typo="Typo.body1" Style="font-style: italic;">@(string.IsNullOrWhiteSpace(Order.SalesNote) ? "Không có" : Order.SalesNote)</MudText>
+                @if (_isEditing)
+                {
+                    <MudTextField @bind-Value="_editSalesNote" Label="Ghi chú đơn hàng" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" />
+                }
+                else
+                {
+                    <MudText Typo="Typo.body1" Style="font-style: italic;">@(string.IsNullOrWhiteSpace(Order.SalesNote) ? "Không có" : Order.SalesNote)</MudText>
+                }
             </MudItem>
 
             <!-- Order Items Detail Table -->
@@ -97,7 +120,16 @@
         </MudGrid>
     </DialogContent>
     <DialogActions>
-        <MudButton Color="Color.Primary" OnClick="Close" Variant="Variant.Filled" Class="rounded-lg">Đóng</MudButton>
+        @if (_isEditing)
+        {
+            <MudButton Color="Color.Default" OnClick="CancelEdit" Disabled="_isSaving">Hủy</MudButton>
+            <MudButton Color="Color.Success" OnClick="SaveEdit" Variant="Variant.Filled" Disabled="_isSaving">Lưu</MudButton>
+        }
+        else
+        {
+            <MudButton OnClick="StartEdit" Variant="Variant.Filled" Style="background-color: #ffc107; color: #000000; font-weight: bold;">Sửa thông tin</MudButton>
+            <MudButton Color="Color.Primary" OnClick="Close" Variant="Variant.Filled">Đóng</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -107,6 +139,10 @@
 
     private List<DeviceDto> _devices = new();
     private bool _loadingSerials = true;
+    private bool _isEditing = false;
+    private bool _isSaving = false;
+    private string _editOrderCode = string.Empty;
+    private string _editSalesNote = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -128,5 +164,53 @@
         }
     }
 
-    private void Close() => MudDialog.Close();
+    private void StartEdit()
+    {
+        _editOrderCode = Order.OrderCode ?? string.Empty;
+        _editSalesNote = Order.SalesNote ?? string.Empty;
+        _isEditing = true;
+    }
+
+    private void CancelEdit()
+    {
+        _isEditing = false;
+    }
+
+    private async Task SaveEdit()
+    {
+        _isSaving = true;
+        try
+        {
+            var updateDto = new UpdateSalesOrderInfoDto
+            {
+                OrderId = Order.Id,
+                OrderCode = _editOrderCode,
+                SalesNote = _editSalesNote
+            };
+
+            var response = await Http.PutAsJsonAsync($"api/salesorders/{Order.Id}/info", updateDto);
+            if (response.IsSuccessStatusCode)
+            {
+                Order.OrderCode = _editOrderCode;
+                Order.SalesNote = _editSalesNote;
+                Snackbar.Add("Cập nhật thông tin đơn hàng thành công!", Severity.Success);
+                _isEditing = false;
+            }
+            else
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Lỗi: {error}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi kết nối: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _isSaving = false;
+        }
+    }
+
+    private void Close() => MudDialog.Close(DialogResult.Ok(true));
 }

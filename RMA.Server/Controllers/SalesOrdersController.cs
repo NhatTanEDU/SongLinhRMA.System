@@ -51,7 +51,7 @@ namespace RMA.Server.Controllers
                  int nextIndex = allOrders.Count + 1;
                  var entity = new SalesOrder
                  {
-                     OrderCode = $"SO-{nextIndex:D4}",
+                     OrderCode = string.IsNullOrWhiteSpace(dto.OrderCode) ? null : dto.OrderCode.Trim(),
                      CustomerId = dto.CustomerId,
                      OrderDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc),
                      Status = "Pending",
@@ -177,6 +177,7 @@ namespace RMA.Server.Controllers
 
                 order.CustomerId = dto.CustomerId;
                 order.SalesNote = dto.SalesNote;
+                order.OrderCode = string.IsNullOrWhiteSpace(dto.OrderCode) ? null : dto.OrderCode.Trim();
                 order.Details.Clear();
 
                 foreach (var detail in dto.Details)
@@ -225,6 +226,53 @@ namespace RMA.Server.Controllers
             }
         }
 
+        [HttpPut("{id}/info")]
+        [Authorize(Roles = "Admin,Tech")]
+        public async Task<IActionResult> UpdateInfo(string id, [FromBody] UpdateSalesOrderInfoDto dto)
+        {
+            if (dto == null || string.IsNullOrWhiteSpace(id) || id != dto.OrderId)
+            {
+                return BadRequest("Yêu cầu không hợp lệ.");
+            }
+
+            try
+            {
+                var order = await _orderRepo.GetByIdAsync(id);
+                if (order == null) return NotFound("Không tìm thấy đơn hàng.");
+
+                // Validate uniqueness of OrderCode if provided and changed
+                var newOrderCode = dto.OrderCode?.Trim();
+                if (!string.IsNullOrWhiteSpace(newOrderCode))
+                {
+                    if (!newOrderCode.Equals(order.OrderCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Check if another order already has this OrderCode
+                        var allOrders = await _orderRepo.GetAllAsync();
+                        var duplicate = allOrders.FirstOrDefault(o => o.Id != id && newOrderCode.Equals(o.OrderCode, StringComparison.OrdinalIgnoreCase));
+                        if (duplicate != null)
+                        {
+                            return BadRequest($"Mã đơn hàng '{newOrderCode}' đã tồn tại trên một đơn hàng khác!");
+                        }
+                    }
+                    order.OrderCode = newOrderCode;
+                }
+                else
+                {
+                    order.OrderCode = ""; // keep empty
+                }
+
+                order.SalesNote = dto.SalesNote?.Trim() ?? "";
+
+                await _orderRepo.UpdateAsync(id, order);
+                await _hubContext.Clients.All.SendAsync("OrderStateChanged");
+                return Ok();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
         [HttpPost("confirm-delivery")]
         [Authorize(Roles = "Admin,Tech")]
         public async Task<IActionResult> ConfirmDelivery([FromBody] ConfirmDeliveryDto dto)
@@ -240,6 +288,33 @@ namespace RMA.Server.Controllers
                 if (order == null || (order.Status != "Pending" && order.Status != "Delivering"))
                 {
                     return BadRequest("Đơn hàng không tồn tại hoặc không ở trạng thái hợp lệ để xác nhận giao hàng (phải là Pending hoặc Delivering).");
+                }
+
+                if (dto.SerialNumbersByModel != null)
+                {
+                    var allIncomingSerials = new List<string>();
+                    foreach (var kvp in dto.SerialNumbersByModel)
+                    {
+                        if (kvp.Value == null) continue;
+                        foreach (var sn in kvp.Value)
+                        {
+                            if (!string.IsNullOrWhiteSpace(sn) && !sn.Equals("KHÔNG CÓ S/N", StringComparison.OrdinalIgnoreCase))
+                            {
+                                allIncomingSerials.Add(sn.Trim().ToUpper());
+                            }
+                        }
+                    }
+
+                    var duplicateSn = allIncomingSerials
+                        .GroupBy(s => s)
+                        .Where(g => g.Count() > 1)
+                        .Select(g => g.Key)
+                        .FirstOrDefault();
+
+                    if (duplicateSn != null)
+                    {
+                        return BadRequest($"Không thể xác nhận giao hàng. Số S/N '{duplicateSn}' bị nhập trùng lặp nhiều lần trong danh sách giao hàng!");
+                    }
                 }
 
                 var models = await GetAndFixModelsAsync();
@@ -283,15 +358,30 @@ namespace RMA.Server.Controllers
 
                     foreach (var sn in serials)
                     {
+                        var normalizedSn = string.IsNullOrWhiteSpace(sn) || sn.Equals("KHÔNG CÓ S/N", StringComparison.OrdinalIgnoreCase) ? "" : sn.Trim().ToUpper();
+                        var deviceId = string.IsNullOrEmpty(normalizedSn) ? $"NOSERIAL-{Guid.NewGuid()}" : normalizedSn;
+
+                        if (!deviceId.StartsWith("NOSERIAL-"))
+                        {
+                            var existing = await _deviceRepo.GetByIdAsync(deviceId);
+                            if (existing != null)
+                            {
+                                var customer = await _customerRepo.GetByIdAsync(existing.CustomerId);
+                                var customerName = customer?.Name ?? "khách hàng khác";
+                                return BadRequest($"Không thể giao hàng. Số S/N '{sn}' đã tồn tại trên hệ thống và thuộc sở hữu của khách hàng {customerName}!");
+                            }
+                        }
+
                         var device = new Device
                         {
-                            Id = Guid.NewGuid().ToString(),
+                            Id = deviceId,
                             SerialNumber = sn,
                             CustomerId = order.CustomerId,
                             ModelId = detail.ModelId,
                             PurchaseDate = purchaseDate,
                             WarrantyExpiry = purchaseDate.AddMonths(detail.WarrantyMonths),
-                            OrderId = order.Id
+                            OrderId = order.Id,
+                            OrderCode = order.OrderCode
                         };
                         
                         var deviceDocRef = _firestoreDb.Collection("devices").Document(device.Id);

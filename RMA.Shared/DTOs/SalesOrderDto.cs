@@ -30,6 +30,7 @@ namespace RMA.Shared.DTOs
 
     public class SalesOrderCreateDto
     {
+        public string OrderCode { get; set; } = string.Empty;
         public string CustomerId { get; set; } = string.Empty;
         public string SalesNote { get; set; } = string.Empty;
         public List<OrderDetailCreateDto> Details { get; set; } = new List<OrderDetailCreateDto>();
@@ -48,5 +49,12 @@ namespace RMA.Shared.DTOs
     {
         public string OrderId { get; set; } = string.Empty;
         public Dictionary<string, List<string>> SerialNumbersByModel { get; set; } = new Dictionary<string, List<string>>();
+    }
+
+    public class UpdateSalesOrderInfoDto
+    {
+        public string OrderId { get; set; } = string.Empty;
+        public string? OrderCode { get; set; }
+        public string? SalesNote { get; set; }
     }
 }

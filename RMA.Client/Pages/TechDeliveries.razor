@@ -32,7 +32,16 @@
                     <MudPaper Elevation="3" Class="pa-6 rounded-xl position-relative h-100 d-flex flex-column justify-space-between" Style="@($"border-left: 6px solid {(order.Status == "Delivering" ? "#0072BC" : "#FFF200")};")">
                         <div>
                             <div class="d-flex justify-space-between align-center mb-3">
-                                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">@order.OrderCode</MudText>
+                                <MudText Typo="Typo.h6" Class="fw-bold">
+                                    @if (string.IsNullOrWhiteSpace(order.OrderCode))
+                                    {
+                                        <span style="color: #d32f2f;">Chưa có mã</span>
+                                    }
+                                    else
+                                    {
+                                        <span style="color: #0072BC;">@order.OrderCode</span>
+                                    }
+                                </MudText>
                                 @if (order.Status == "Pending")
                                 {
                                     <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">Chờ giao</MudChip>
@@ -74,7 +83,7 @@
                                     }
                                     else if (order.Status == "Delivering")
                                     {
-                                        <MudButton Variant="Variant.Outlined" Color="Color.Warning" StartIcon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Pending"))" Class="flex-grow-1 rounded-lg">
+                                        <MudButton Variant="Variant.Outlined" Style="color: #d97706; border-color: #d97706;" StartIcon="@Icons.Material.Filled.ArrowBack" Size="Size.Small" OnClick="@(() => UpdateStatus(order, "Pending"))" Class="flex-grow-1 rounded-lg">
                                             Hoàn về kho
                                         </MudButton>
                                     }

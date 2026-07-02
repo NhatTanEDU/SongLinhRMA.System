@@ -11,18 +11,23 @@
         <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
             <MudGrid>
                 <!-- Customer Selection -->
-                <MudItem xs="12" sm="6" Class="d-flex align-center">
+                <MudItem xs="12" sm="4" Class="d-flex align-center">
                     <MudSelect T="string" Label="Khách Hàng" @bind-Value="_order.CustomerId" Required="true" RequiredError="Vui lòng chọn khách hàng!" Variant="Variant.Outlined" Margin="Margin.Dense" Class="flex-grow-1">
                         @foreach (var c in _customers)
                         {
                             <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
                         }
                     </MudSelect>
-                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Class="ml-2 mt-4" OnClick="OpenCustomerDialog" title="Thêm Khách Hàng Nhanh" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Add" Color="Color.Primary" Class="ml-2 mt-2" OnClick="OpenCustomerDialog" title="Thêm Khách Hàng Nhanh" />
+                </MudItem>
+
+                <!-- Order Number -->
+                <MudItem xs="12" sm="4">
+                    <MudTextField T="string" Label="Số đơn hàng (Tùy chọn)" @bind-Value="_order.OrderCode" Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="VD: 026, 029..." />
                 </MudItem>
 
                 <!-- Sales Note -->
-                <MudItem xs="12" sm="6">
+                <MudItem xs="12" sm="4">
                     <MudTextField T="string" Label="Ghi chú đơn hàng (SalesNote)" @bind-Value="_order.SalesNote" Variant="Variant.Outlined" Margin="Margin.Dense" />
                 </MudItem>
 
@@ -135,6 +140,7 @@
         {
             _order.CustomerId = OrderToEdit.CustomerId;
             _order.SalesNote = OrderToEdit.SalesNote;
+            _order.OrderCode = OrderToEdit.OrderCode;
             _order.Details = OrderToEdit.Details.Select(d => new OrderDetailCreateDto
             {
                 ModelId = d.ModelId,

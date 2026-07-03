@@ -27,8 +27,6 @@ public class RmaTicketsController : ControllerBase
     private readonly FirestoreRepository<StatusHistory> _statusHistoryRepo;
     private readonly FirestoreRepository<Location> _locationRepo;
     private readonly IPdfService _pdfService;
-    private readonly IMemoryCache _cache;
-
     public RmaTicketsController(
         FirestoreRepository<RmaTicket> ticketRepo,
         FirestoreRepository<Device> deviceRepo,
@@ -39,8 +37,7 @@ public class RmaTicketsController : ControllerBase
         FirestoreRepository<Attachment> attachmentRepo,
         FirestoreRepository<StatusHistory> statusHistoryRepo,
         FirestoreRepository<Location> locationRepo,
-        IPdfService pdfService,
-        IMemoryCache cache)
+        IPdfService pdfService)
     {
         _ticketRepo = ticketRepo;
         _deviceRepo = deviceRepo;
@@ -52,7 +49,6 @@ public class RmaTicketsController : ControllerBase
         _statusHistoryRepo = statusHistoryRepo;
         _locationRepo = locationRepo;
         _pdfService = pdfService;
-        _cache = cache;
     }
 
     [HttpGet]
@@ -60,53 +56,15 @@ public class RmaTicketsController : ControllerBase
     {
         var tickets = await _ticketRepo.GetAllAsync();
         
-        var devices = await _cache.GetOrCreateAsync("devices_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
-        }) ?? new Dictionary<string, Device>();
-
-        var customers = await _cache.GetOrCreateAsync("customers_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
-        }) ?? new Dictionary<string, Customer>();
-
-        var statuses = await _cache.GetOrCreateAsync("statuses_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
-        }) ?? new Dictionary<string, StatusMaster>();
-
-        var vendors = await _cache.GetOrCreateAsync("vendors_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
-        }) ?? new Dictionary<string, Vendor>();
-
-        var models = await _cache.GetOrCreateAsync("models_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
-        }) ?? new Dictionary<string, Model>();
-
-        var attachmentsGroup = await _cache.GetOrCreateAsync("attachments_group", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
-            return (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
-        }) ?? new Dictionary<string, List<Attachment>>();
-
-        var statusHistoriesGroup = await _cache.GetOrCreateAsync("histories_group", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
-            return (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
-        }) ?? new Dictionary<string, List<StatusHistory>>();
-
-        var locations = await _cache.GetOrCreateAsync("locations_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
-        }) ?? new Dictionary<string, Location>();
+        var devices = (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
+        var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
+        var statuses = (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
+        var vendors = (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
+        var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+        
+        var attachmentsGroup = (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        var statusHistoriesGroup = (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        var locations = (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
 
         var dtos = tickets.Select(t =>
         {
@@ -115,69 +73,10 @@ public class RmaTicketsController : ControllerBase
             var status = statuses.TryGetValue(t.StatusId, out var s) ? s : null;
             var vendor = t.VendorId != null && vendors.TryGetValue(t.VendorId, out var v) ? v : null;
             var model = device != null && models.TryGetValue(device.ModelId, out var m) ? m : null;
+            attachmentsGroup.TryGetValue(t.Id, out var atts);
+            statusHistoriesGroup.TryGetValue(t.Id, out var shs);
 
-            var dto = new RmaTicketDto
-            {
-                Id = t.Id,
-                DeviceId = t.DeviceId,
-                DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
-                DeviceModelName = model?.ModelName ?? string.Empty,
-                DeviceWarrantyExpiry = device?.WarrantyExpiry,
-                
-                CustomerId = t.CustomerId,
-                CustomerName = customer?.Name ?? string.Empty,
-                CustomerPhone = customer?.Phone,
-                CustomerContactPerson = customer?.ContactPerson,
-                CustomerAvatarUrl = customer?.AvatarUrl,
-                
-                StatusId = t.StatusId,
-                StatusName = status?.StatusName ?? string.Empty,
-                StatusColorCode = status?.ColorCode,
-                WarningColor = t.WarningColor,
-                
-                VendorId = t.VendorId,
-                VendorName = vendor?.Name,
-                VendorWarrantyLink = vendor?.WarrantyLink,
-                
-                ProblemDescription = t.ProblemDescription,
-                ServiceMode = t.ServiceMode,
-                ReceivedDate = t.ReceivedDate,
-                SentDate = t.SentDate,
-                IsUrgent = t.IsUrgent,
-                StaffNote = t.StaffNote,
-                EndUserName = t.EndUserName
-            };
-            dto.PopulateChecklistsFromStaffNote();
-
-            if (attachmentsGroup.TryGetValue(t.Id, out var atts))
-            {
-                dto.Attachments = atts.Select(a => new AttachmentDto
-                {
-                    Id = a.Id,
-                    FileUrl = a.FileUrl,
-                    FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
-                    UploadedAt = a.UploadedAt
-                }).ToList();
-            }
-
-            if (statusHistoriesGroup.TryGetValue(t.Id, out var shs))
-            {
-                dto.StatusHistories = shs.Select(sh =>
-                {
-                    var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
-                    var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
-                    return new StatusHistoryDto
-                    {
-                        Id = sh.Id,
-                        StatusName = stName,
-                        LocationName = locName,
-                        Note = sh.Note,
-                        CreatedAt = sh.UpdateTime
-                    };
-                }).OrderByDescending(h => h.CreatedAt).ToList();
-            }
-
-            return dto;
+            return MapToRmaTicketDto(t, device, customer, status, vendor, model, atts, shs, locations, statuses);
         }).ToList();
 
         return Ok(dtos);
@@ -193,11 +92,7 @@ public class RmaTicketsController : ControllerBase
 
         if (request.Month.HasValue || !string.IsNullOrEmpty(request.WarningColor))
         {
-            var allTickets = await _cache.GetOrCreateAsync("all_tickets_list", async entry =>
-            {
-                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(5);
-                return await _ticketRepo.GetAllAsync();
-            }) ?? new List<RmaTicket>();
+            var allTickets = await _ticketRepo.GetAllAsync();
 
             tickets = allTickets;
 
@@ -218,53 +113,15 @@ public class RmaTicketsController : ControllerBase
             tickets = await _ticketRepo.GetPagedAsync(pageSize, (pageNumber - 1) * pageSize);
         }
 
-        var devices = await _cache.GetOrCreateAsync("devices_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
-        }) ?? new Dictionary<string, Device>();
-
-        var customers = await _cache.GetOrCreateAsync("customers_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
-        }) ?? new Dictionary<string, Customer>();
-
-        var statuses = await _cache.GetOrCreateAsync("statuses_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
-        }) ?? new Dictionary<string, StatusMaster>();
-
-        var vendors = await _cache.GetOrCreateAsync("vendors_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
-        }) ?? new Dictionary<string, Vendor>();
-
-        var models = await _cache.GetOrCreateAsync("models_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
-        }) ?? new Dictionary<string, Model>();
-
-        var attachmentsGroup = await _cache.GetOrCreateAsync("attachments_group", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
-            return (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
-        }) ?? new Dictionary<string, List<Attachment>>();
-
-        var statusHistoriesGroup = await _cache.GetOrCreateAsync("histories_group", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromSeconds(30);
-            return (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
-        }) ?? new Dictionary<string, List<StatusHistory>>();
-
-        var locations = await _cache.GetOrCreateAsync("locations_dict", async entry =>
-        {
-            entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromMinutes(5);
-            return (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
-        }) ?? new Dictionary<string, Location>();
+        var devices = (await _deviceRepo.GetAllAsync()).ToDictionary(d => d.Id, d => d);
+        var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
+        var statuses = (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
+        var vendors = (await _vendorRepo.GetAllAsync()).ToDictionary(v => v.Id, v => v);
+        var models = (await _modelRepo.GetAllAsync()).ToDictionary(m => m.Id, m => m);
+        
+        var attachmentsGroup = (await _attachmentRepo.GetAllAsync()).GroupBy(a => a.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        var statusHistoriesGroup = (await _statusHistoryRepo.GetAllAsync()).GroupBy(sh => sh.RmaTicketId).ToDictionary(g => g.Key, g => g.ToList());
+        var locations = (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
 
         var dtos = tickets.Select(t =>
         {
@@ -273,69 +130,10 @@ public class RmaTicketsController : ControllerBase
             var status = statuses.TryGetValue(t.StatusId, out var s) ? s : null;
             var vendor = t.VendorId != null && vendors.TryGetValue(t.VendorId, out var v) ? v : null;
             var model = device != null && models.TryGetValue(device.ModelId, out var m) ? m : null;
+            attachmentsGroup.TryGetValue(t.Id, out var atts);
+            statusHistoriesGroup.TryGetValue(t.Id, out var shs);
 
-            var dto = new RmaTicketDto
-            {
-                Id = t.Id,
-                DeviceId = t.DeviceId,
-                DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
-                DeviceModelName = model?.ModelName ?? string.Empty,
-                DeviceWarrantyExpiry = device?.WarrantyExpiry,
-                
-                CustomerId = t.CustomerId,
-                CustomerName = customer?.Name ?? string.Empty,
-                CustomerPhone = customer?.Phone,
-                CustomerContactPerson = customer?.ContactPerson,
-                CustomerAvatarUrl = customer?.AvatarUrl,
-                
-                StatusId = t.StatusId,
-                StatusName = status?.StatusName ?? string.Empty,
-                StatusColorCode = status?.ColorCode,
-                WarningColor = t.WarningColor,
-                
-                VendorId = t.VendorId,
-                VendorName = vendor?.Name,
-                VendorWarrantyLink = vendor?.WarrantyLink,
-                
-                ProblemDescription = t.ProblemDescription,
-                ServiceMode = t.ServiceMode,
-                ReceivedDate = t.ReceivedDate,
-                SentDate = t.SentDate,
-                IsUrgent = t.IsUrgent,
-                StaffNote = t.StaffNote,
-                EndUserName = t.EndUserName
-            };
-            dto.PopulateChecklistsFromStaffNote();
-
-            if (attachmentsGroup.TryGetValue(t.Id, out var atts))
-            {
-                dto.Attachments = atts.Select(a => new AttachmentDto
-                {
-                    Id = a.Id,
-                    FileUrl = a.FileUrl,
-                    FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
-                    UploadedAt = a.UploadedAt
-                }).ToList();
-            }
-
-            if (statusHistoriesGroup.TryGetValue(t.Id, out var shs))
-            {
-                dto.StatusHistories = shs.Select(sh =>
-                {
-                    var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
-                    var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
-                    return new StatusHistoryDto
-                    {
-                        Id = sh.Id,
-                        StatusName = stName,
-                        LocationName = locName,
-                        Note = sh.Note,
-                        CreatedAt = sh.UpdateTime
-                    };
-                }).OrderByDescending(h => h.CreatedAt).ToList();
-            }
-
-            return dto;
+            return MapToRmaTicketDto(t, device, customer, status, vendor, model, atts, shs, locations, statuses);
         }).ToList();
 
         return Ok(dtos);
@@ -382,62 +180,7 @@ public class RmaTicketsController : ControllerBase
         var locations = (await _locationRepo.GetAllAsync()).ToDictionary(l => l.Id, l => l);
         var statuses = (await _statusRepo.GetAllAsync()).ToDictionary(s => s.Id, s => s);
 
-        var dto = new RmaTicketDto
-        {
-            Id = t.Id,
-            DeviceId = t.DeviceId,
-            DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
-            DeviceModelName = model?.ModelName ?? string.Empty,
-            DeviceWarrantyExpiry = device?.WarrantyExpiry,
-            
-            CustomerId = t.CustomerId,
-            CustomerName = customer?.Name ?? string.Empty,
-            CustomerPhone = customer?.Phone,
-            CustomerContactPerson = customer?.ContactPerson,
-            CustomerAvatarUrl = customer?.AvatarUrl,
-            
-            StatusId = t.StatusId,
-            StatusName = status?.StatusName ?? string.Empty,
-            StatusColorCode = status?.ColorCode,
-            WarningColor = t.WarningColor,
-            
-            VendorId = t.VendorId,
-            VendorName = vendor?.Name,
-            VendorWarrantyLink = vendor?.WarrantyLink,
-            
-            ProblemDescription = t.ProblemDescription,
-            ServiceMode = t.ServiceMode,
-            ReceivedDate = t.ReceivedDate,
-            SentDate = t.SentDate,
-            IsUrgent = t.IsUrgent,
-            StaffNote = t.StaffNote,
-            EndUserName = t.EndUserName
-        };
-        dto.PopulateChecklistsFromStaffNote();
-
-        dto.Attachments = attachments.Select(a => new AttachmentDto
-        {
-            Id = a.Id,
-            FileUrl = a.FileUrl,
-            FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
-            UploadedAt = a.UploadedAt
-        }).ToList();
-
-        dto.StatusHistories = statusHistories.Select(sh =>
-        {
-            var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
-            var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
-            return new StatusHistoryDto
-            {
-                Id = sh.Id,
-                StatusName = stName,
-                LocationName = locName,
-                Note = sh.Note,
-                CreatedAt = sh.UpdateTime
-            };
-        }).OrderByDescending(h => h.CreatedAt).ToList();
-
-        return dto;
+        return MapToRmaTicketDto(t, device, customer, status, vendor, model, attachments, statusHistories, locations, statuses);
     }
 
     [HttpPost]
@@ -656,37 +399,7 @@ public class RmaTicketsController : ControllerBase
         var vendor = t.VendorId != null ? await _vendorRepo.GetByIdAsync(t.VendorId) : null;
         var model = device != null ? await _modelRepo.GetByIdAsync(device.ModelId) : null;
 
-        var dto = new RmaTicketDto
-        {
-            Id = t.Id,
-            DeviceId = t.DeviceId,
-            DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
-            DeviceModelName = model?.ModelName ?? string.Empty,
-            DeviceWarrantyExpiry = device?.WarrantyExpiry,
-            
-            CustomerId = t.CustomerId,
-            CustomerName = customer?.Name ?? string.Empty,
-            CustomerPhone = customer?.Phone,
-            CustomerContactPerson = customer?.ContactPerson,
-            CustomerAvatarUrl = customer?.AvatarUrl,
-            
-            StatusId = t.StatusId,
-            StatusName = status?.StatusName ?? string.Empty,
-            StatusColorCode = status?.ColorCode,
-            WarningColor = t.WarningColor,
-            
-            VendorId = t.VendorId,
-            VendorName = vendor?.Name,
-            VendorWarrantyLink = vendor?.WarrantyLink,
-            
-            ProblemDescription = t.ProblemDescription,
-            ServiceMode = t.ServiceMode,
-            ReceivedDate = t.ReceivedDate,
-            SentDate = t.SentDate,
-            IsUrgent = t.IsUrgent,
-            StaffNote = t.StaffNote,
-            EndUserName = t.EndUserName
-        };
+        var dto = MapToRmaTicketDto(t, device, customer, status, vendor, model, null, null, null, null);
 
         var pdfBytes = _pdfService.GenerateRmaReceiptPdf(dto);
         return File(pdfBytes, "application/pdf", $"RmaReceipt_{id}.pdf");
@@ -698,51 +411,15 @@ public class RmaTicketsController : ControllerBase
         var t = await _ticketRepo.GetByIdAsync(id);
         if (t == null) return NotFound();
 
-        var customerName = string.IsNullOrWhiteSpace(request.CustomerName) ? t.CustomerId : request.CustomerName;
-        if (customerName == t.CustomerId)
-        {
-            var customer = await _customerRepo.GetByIdAsync(t.CustomerId);
-            if (customer != null)
-            {
-                customerName = customer.Name;
-            }
-        }
+        var customer = await _customerRepo.GetByIdAsync(t.CustomerId);
+        var customerName = string.IsNullOrWhiteSpace(request.CustomerName) ? (customer?.Name ?? t.CustomerId) : request.CustomerName;
 
         var device = await _deviceRepo.GetByIdAsync(t.DeviceId);
         var status = await _statusRepo.GetByIdAsync(t.StatusId);
         var vendor = t.VendorId != null ? await _vendorRepo.GetByIdAsync(t.VendorId) : null;
         var model = device != null ? await _modelRepo.GetByIdAsync(device.ModelId) : null;
 
-        var dto = new RmaTicketDto
-        {
-            Id = t.Id,
-            DeviceId = t.DeviceId,
-            DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
-            DeviceModelName = model?.ModelName ?? string.Empty,
-            DeviceWarrantyExpiry = device?.WarrantyExpiry,
-            
-            CustomerId = t.CustomerId,
-            CustomerName = customerName,
-            CustomerPhone = (await _customerRepo.GetByIdAsync(t.CustomerId))?.Phone,
-            CustomerContactPerson = (await _customerRepo.GetByIdAsync(t.CustomerId))?.ContactPerson,
-            
-            StatusId = t.StatusId,
-            StatusName = status?.StatusName ?? string.Empty,
-            StatusColorCode = status?.ColorCode,
-            WarningColor = t.WarningColor,
-            
-            VendorId = t.VendorId,
-            VendorName = vendor?.Name,
-            VendorWarrantyLink = vendor?.WarrantyLink,
-            
-            ProblemDescription = t.ProblemDescription,
-            ServiceMode = t.ServiceMode,
-            ReceivedDate = t.ReceivedDate,
-            SentDate = t.SentDate,
-            IsUrgent = t.IsUrgent,
-            StaffNote = t.StaffNote,
-            EndUserName = t.EndUserName
-        };
+        var dto = MapToRmaTicketDto(t, device, customer, status, vendor, model, null, null, null, null, customerName);
 
         var items = request.Items;
         if (items == null || !items.Any())
@@ -766,6 +443,83 @@ public class RmaTicketsController : ControllerBase
         {
             FileDownloadName = $"HandoverMinute_{id}.pdf"
         };
+    }
+
+    private RmaTicketDto MapToRmaTicketDto(
+        RmaTicket t,
+        Device? device,
+        Customer? customer,
+        StatusMaster? status,
+        Vendor? vendor,
+        Model? model,
+        List<Attachment>? attachments,
+        List<StatusHistory>? statusHistories,
+        Dictionary<string, Location>? locations,
+        Dictionary<string, StatusMaster>? statuses,
+        string? customerNameOverride = null)
+    {
+        var dto = new RmaTicketDto
+        {
+            Id = t.Id,
+            DeviceId = t.DeviceId,
+            DeviceSerialNumber = device?.SerialNumber ?? string.Empty,
+            DeviceModelName = model?.ModelName ?? string.Empty,
+            DeviceWarrantyExpiry = device?.WarrantyExpiry,
+            
+            CustomerId = t.CustomerId,
+            CustomerName = customerNameOverride ?? customer?.Name ?? string.Empty,
+            CustomerPhone = customer?.Phone,
+            CustomerContactPerson = customer?.ContactPerson,
+            CustomerAvatarUrl = customer?.AvatarUrl,
+            
+            StatusId = t.StatusId,
+            StatusName = status?.StatusName ?? string.Empty,
+            StatusColorCode = status?.ColorCode,
+            WarningColor = t.WarningColor,
+            
+            VendorId = t.VendorId,
+            VendorName = vendor?.Name,
+            VendorWarrantyLink = vendor?.WarrantyLink,
+            
+            ProblemDescription = t.ProblemDescription,
+            ServiceMode = t.ServiceMode,
+            ReceivedDate = t.ReceivedDate,
+            SentDate = t.SentDate,
+            IsUrgent = t.IsUrgent,
+            StaffNote = t.StaffNote,
+            EndUserName = t.EndUserName
+        };
+        dto.PopulateChecklistsFromStaffNote();
+
+        if (attachments != null)
+        {
+            dto.Attachments = attachments.Select(a => new AttachmentDto
+            {
+                Id = a.Id,
+                FileUrl = a.FileUrl,
+                FileName = System.IO.Path.GetFileName(a.FileUrl) ?? "Attachment",
+                UploadedAt = a.UploadedAt
+            }).ToList();
+        }
+
+        if (statusHistories != null && locations != null && statuses != null)
+        {
+            dto.StatusHistories = statusHistories.Select(sh =>
+            {
+                var locName = sh.LocationId != null && locations.TryGetValue(sh.LocationId, out var loc) ? loc.Name : "Nội bộ";
+                var stName = sh.StatusId != null && statuses.TryGetValue(sh.StatusId, out var st) ? st.StatusName : "Cập nhật";
+                return new StatusHistoryDto
+                {
+                    Id = sh.Id,
+                    StatusName = stName,
+                    LocationName = locName,
+                    Note = sh.Note,
+                    CreatedAt = sh.UpdateTime
+                };
+            }).OrderByDescending(h => h.CreatedAt).ToList();
+        }
+
+        return dto;
     }
 
 

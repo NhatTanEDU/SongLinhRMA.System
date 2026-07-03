@@ -29,20 +29,18 @@ namespace RMA.Server.Tests
 
         public RmaTicketsControllerTests()
         {
-            _mockTicketRepo = new Mock<FirestoreRepository<RmaTicket>>(null!, "rma_tickets");
-            _mockDeviceRepo = new Mock<FirestoreRepository<Device>>(null!, "devices");
-            _mockCustomerRepo = new Mock<FirestoreRepository<Customer>>(null!, "customers");
-            _mockStatusRepo = new Mock<FirestoreRepository<StatusMaster>>(null!, "status_masters");
-            _mockVendorRepo = new Mock<FirestoreRepository<Vendor>>(null!, "vendors");
-            _mockModelRepo = new Mock<FirestoreRepository<Model>>(null!, "models");
-            _mockAttachmentRepo = new Mock<FirestoreRepository<Attachment>>(null!, "attachments");
-            _mockStatusHistoryRepo = new Mock<FirestoreRepository<StatusHistory>>(null!, "status_histories");
-            _mockLocationRepo = new Mock<FirestoreRepository<Location>>(null!, "locations");
+            _mockTicketRepo = new Mock<FirestoreRepository<RmaTicket>>(null!, "rma_tickets", null);
+            _mockDeviceRepo = new Mock<FirestoreRepository<Device>>(null!, "devices", null);
+            _mockCustomerRepo = new Mock<FirestoreRepository<Customer>>(null!, "customers", null);
+            _mockStatusRepo = new Mock<FirestoreRepository<StatusMaster>>(null!, "status_masters", null);
+            _mockVendorRepo = new Mock<FirestoreRepository<Vendor>>(null!, "vendors", null);
+            _mockModelRepo = new Mock<FirestoreRepository<Model>>(null!, "models", null);
+            _mockAttachmentRepo = new Mock<FirestoreRepository<Attachment>>(null!, "attachments", null);
+            _mockStatusHistoryRepo = new Mock<FirestoreRepository<StatusHistory>>(null!, "status_histories", null);
+            _mockLocationRepo = new Mock<FirestoreRepository<Location>>(null!, "locations", null);
             _mockPdfService = new Mock<IPdfService>();
 
             SetupEmptyRepos();
-
-            var memoryCache = new MemoryCache(new MemoryCacheOptions());
 
             _controller = new RmaTicketsController(
                 _mockTicketRepo.Object,
@@ -54,8 +52,7 @@ namespace RMA.Server.Tests
                 _mockAttachmentRepo.Object,
                 _mockStatusHistoryRepo.Object,
                 _mockLocationRepo.Object,
-                _mockPdfService.Object,
-                memoryCache
+                _mockPdfService.Object
             );
         }
 

@@ -21,29 +21,21 @@ public class RmaAlertBackgroundService : BackgroundService
     private readonly IConfiguration _config;
     private readonly ILogger<RmaAlertBackgroundService> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly IMemoryCache _cache;
 
     public RmaAlertBackgroundService(
         IFcmService fcmService,
         IConfiguration config,
         ILogger<RmaAlertBackgroundService> logger,
-        IServiceScopeFactory scopeFactory,
-        IMemoryCache cache)
+        IServiceScopeFactory scopeFactory)
     {
         _fcmService = fcmService;
         _config = config;
         _logger = logger;
         _scopeFactory = scopeFactory;
-        _cache = cache;
     }
 
     private async Task<(double YellowDays, double RedDays)> GetSlaThresholdsAsync(IServiceProvider serviceProvider)
     {
-        if (_cache.TryGetValue("sla_settings_cached", out (double yellow, double red) thresholds))
-        {
-            return thresholds;
-        }
-
         double yellowDays = 10;
         double redDays = 14;
 
@@ -62,10 +54,6 @@ public class RmaAlertBackgroundService : BackgroundService
             {
                 redDays = rVal;
             }
-
-            var cacheEntryOptions = new MemoryCacheEntryOptions()
-                .SetAbsoluteExpiration(TimeSpan.FromMinutes(10));
-            _cache.Set("sla_settings_cached", (yellowDays, redDays), cacheEntryOptions);
         }
         catch (Exception ex)
         {

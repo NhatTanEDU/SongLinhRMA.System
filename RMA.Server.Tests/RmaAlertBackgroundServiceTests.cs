@@ -41,9 +41,9 @@ namespace RMA.Server.Tests
             mockSection.Setup(s => s.Value).Returns("1");
             mockConfig.Setup(c => c.GetSection("Firebase:CheckIntervalSeconds")).Returns(mockSection.Object);
 
-            var mockTicketRepo = new Mock<FirestoreRepository<RmaTicket>>(null!, "rma_tickets");
-            var mockStatusRepo = new Mock<FirestoreRepository<StatusMaster>>(null!, "status_masters");
-            var mockCustomerRepo = new Mock<FirestoreRepository<Customer>>(null!, "customers");
+            var mockTicketRepo = new Mock<FirestoreRepository<RmaTicket>>(null!, "rma_tickets", null);
+            var mockStatusRepo = new Mock<FirestoreRepository<StatusMaster>>(null!, "status_masters", null);
+            var mockCustomerRepo = new Mock<FirestoreRepository<Customer>>(null!, "customers", null);
 
             // Mock Data
             var statuses = new List<StatusMaster>
@@ -160,7 +160,7 @@ namespace RMA.Server.Tests
             mockScopeFactory.Setup(f => f.CreateScope()).Returns(mockScope.Object);
             mockScope.Setup(s => s.ServiceProvider).Returns(mockServiceProvider.Object);
 
-            var mockSettingRepo = new Mock<FirestoreRepository<SystemSetting>>(null!, "system_settings");
+            var mockSettingRepo = new Mock<FirestoreRepository<SystemSetting>>(null!, "system_settings", null);
             mockSettingRepo.Setup(r => r.GetAllAsync()).ReturnsAsync(new List<SystemSetting>());
 
             mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<RmaTicket>))).Returns(mockTicketRepo.Object);
@@ -168,14 +168,11 @@ namespace RMA.Server.Tests
             mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<Customer>))).Returns(mockCustomerRepo.Object);
             mockServiceProvider.Setup(p => p.GetService(typeof(FirestoreRepository<SystemSetting>))).Returns(mockSettingRepo.Object);
 
-            var memoryCache = new MemoryCache(new MemoryCacheOptions());
-
             var service = new RmaAlertBackgroundService(
                 mockFcmService.Object,
                 mockConfig.Object,
                 mockLogger.Object,
-                mockScopeFactory.Object,
-                memoryCache
+                mockScopeFactory.Object
             );
 
             // Act

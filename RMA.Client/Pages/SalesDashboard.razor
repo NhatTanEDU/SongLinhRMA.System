@@ -275,6 +275,7 @@
     private bool _pendingRefresh = false;
     private string _searchString = "";
     private HubConnection? _hubConnection;
+    private bool _isSearchResult = false;
 
     private async Task OnSearchKeyDown(KeyboardEventArgs e)
     {
@@ -287,6 +288,7 @@
     private async Task ClearSearch()
     {
         _searchString = "";
+        _isSearchResult = false;
         await LoadOrders();
     }
 
@@ -294,6 +296,7 @@
     {
         if (string.IsNullOrWhiteSpace(_searchString))
         {
+            _isSearchResult = false;
             await LoadOrders();
             return;
         }
@@ -310,6 +313,7 @@
                 var result = await response.Content.ReadFromJsonAsync<SalesOrderSearchResultDto>();
                 if (result != null)
                 {
+                    _isSearchResult = true;
                     _orders = new List<SalesOrderDto>
                     {
                         new SalesOrderDto
@@ -331,16 +335,19 @@
             }
             else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
+                _isSearchResult = false;
                 Snackbar.Add($"Không tìm thấy đơn hàng hoặc thiết bị khớp với S/N '{term}'", Severity.Warning);
             }
             else
             {
+                _isSearchResult = false;
                 var errorMsg = await response.Content.ReadAsStringAsync();
                 Snackbar.Add($"Lỗi khi tìm kiếm: {errorMsg}", Severity.Error);
             }
         }
         catch (Exception ex)
         {
+            _isSearchResult = false;
             Snackbar.Add($"Lỗi kết nối: {ex.Message}", Severity.Error);
         }
         finally
@@ -381,6 +388,7 @@
 
     private async Task LoadOrders()
     {
+        _isSearchResult = false;
         if (_isLoadingOrders)
         {
             _pendingRefresh = true;
@@ -475,6 +483,9 @@
 
     private Func<SalesOrderDto, bool> _quickFilter => x =>
     {
+        if (_isSearchResult)
+            return true;
+
         if (string.IsNullOrWhiteSpace(_searchString))
             return true;
         if (!string.IsNullOrEmpty(x.OrderCode) && x.OrderCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase))

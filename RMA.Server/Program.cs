@@ -5,6 +5,7 @@ using RMA.Server.Services;
 using System.Text;
 using Google.Cloud.Firestore;
 using RMA.Server.Entities;
+using Microsoft.Extensions.Caching.Memory;
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
@@ -90,20 +91,20 @@ var firestoreDb = FirestoreDb.Create(projectId);
 builder.Services.AddSingleton(firestoreDb);
 
 // Register Repositories
-builder.Services.AddScoped<FirestoreRepository<Customer>>(provider => new FirestoreRepository<Customer>(provider.GetRequiredService<FirestoreDb>(), "customers"));
-builder.Services.AddScoped<FirestoreRepository<Device>>(provider => new FirestoreRepository<Device>(provider.GetRequiredService<FirestoreDb>(), "devices"));
-builder.Services.AddScoped<FirestoreRepository<Vendor>>(provider => new FirestoreRepository<Vendor>(provider.GetRequiredService<FirestoreDb>(), "vendors"));
-builder.Services.AddScoped<FirestoreRepository<Model>>(provider => new FirestoreRepository<Model>(provider.GetRequiredService<FirestoreDb>(), "models"));
-builder.Services.AddScoped<FirestoreRepository<Category>>(provider => new FirestoreRepository<Category>(provider.GetRequiredService<FirestoreDb>(), "categories"));
-builder.Services.AddScoped<FirestoreRepository<StatusMaster>>(provider => new FirestoreRepository<StatusMaster>(provider.GetRequiredService<FirestoreDb>(), "status_masters"));
-builder.Services.AddScoped<FirestoreRepository<Location>>(provider => new FirestoreRepository<Location>(provider.GetRequiredService<FirestoreDb>(), "locations"));
-builder.Services.AddScoped<FirestoreRepository<RmaTicket>>(provider => new FirestoreRepository<RmaTicket>(provider.GetRequiredService<FirestoreDb>(), "rma_tickets"));
-builder.Services.AddScoped<FirestoreRepository<Attachment>>(provider => new FirestoreRepository<Attachment>(provider.GetRequiredService<FirestoreDb>(), "attachments"));
-builder.Services.AddScoped<FirestoreRepository<StatusHistory>>(provider => new FirestoreRepository<StatusHistory>(provider.GetRequiredService<FirestoreDb>(), "status_histories"));
-builder.Services.AddScoped<FirestoreRepository<SalesOrder>>(provider => new FirestoreRepository<SalesOrder>(provider.GetRequiredService<FirestoreDb>(), "sales_orders"));
-builder.Services.AddScoped<FirestoreRepository<SystemSetting>>(provider => new FirestoreRepository<SystemSetting>(provider.GetRequiredService<FirestoreDb>(), "system_settings"));
-builder.Services.AddScoped<FirestoreRepository<AuditLog>>(provider => new FirestoreRepository<AuditLog>(provider.GetRequiredService<FirestoreDb>(), "audit_logs"));
-builder.Services.AddScoped<FirestoreRepository<UserAccount>>(provider => new FirestoreRepository<UserAccount>(provider.GetRequiredService<FirestoreDb>(), "users"));
+builder.Services.AddScoped<FirestoreRepository<Customer>>(provider => new FirestoreRepository<Customer>(provider.GetRequiredService<FirestoreDb>(), "customers", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Device>>(provider => new FirestoreRepository<Device>(provider.GetRequiredService<FirestoreDb>(), "devices", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Vendor>>(provider => new FirestoreRepository<Vendor>(provider.GetRequiredService<FirestoreDb>(), "vendors", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Model>>(provider => new FirestoreRepository<Model>(provider.GetRequiredService<FirestoreDb>(), "models", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Category>>(provider => new FirestoreRepository<Category>(provider.GetRequiredService<FirestoreDb>(), "categories", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<StatusMaster>>(provider => new FirestoreRepository<StatusMaster>(provider.GetRequiredService<FirestoreDb>(), "status_masters", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Location>>(provider => new FirestoreRepository<Location>(provider.GetRequiredService<FirestoreDb>(), "locations", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<RmaTicket>>(provider => new FirestoreRepository<RmaTicket>(provider.GetRequiredService<FirestoreDb>(), "rma_tickets", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Attachment>>(provider => new FirestoreRepository<Attachment>(provider.GetRequiredService<FirestoreDb>(), "attachments", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<StatusHistory>>(provider => new FirestoreRepository<StatusHistory>(provider.GetRequiredService<FirestoreDb>(), "status_histories", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<SalesOrder>>(provider => new FirestoreRepository<SalesOrder>(provider.GetRequiredService<FirestoreDb>(), "sales_orders", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<SystemSetting>>(provider => new FirestoreRepository<SystemSetting>(provider.GetRequiredService<FirestoreDb>(), "system_settings", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<AuditLog>>(provider => new FirestoreRepository<AuditLog>(provider.GetRequiredService<FirestoreDb>(), "audit_logs", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<UserAccount>>(provider => new FirestoreRepository<UserAccount>(provider.GetRequiredService<FirestoreDb>(), "users", provider.GetService<IMemoryCache>()));
 
 // Firebase Cloud Messaging (FCM)
 builder.Services.AddSingleton<IFcmService, FcmService>();

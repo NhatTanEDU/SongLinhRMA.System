@@ -1,5 +1,6 @@
 @page "/admin/dashboard"
 @layout AdminLayout
+@implements IDisposable
 @attribute [Authorize(Roles = "Admin")]
 @using RMA.Shared.DTOs
 @inject HttpClient Http
@@ -85,11 +86,19 @@
 
         <!-- Firebase Firestore Resource Monitor -->
         <MudPaper Elevation="3" Class="pa-6 rounded-xl mb-6 bg-white">
-            <div class="d-flex align-center gap-3 mb-4">
-                <MudIcon Icon="@Icons.Material.Filled.CloudQueue" Color="Color.Primary" Style="color: #2C3E50;" />
-                <div>
-                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Giám Sát Hạn Mức Firestore (Firebase Database)</MudText>
-                    <MudText Typo="Typo.caption" Class="text-secondary">Thống kê số lượng truy vấn đọc/ghi thực tế của hệ thống để quản lý định mức giới hạn gói miễn phí.</MudText>
+            <div class="d-flex align-center justify-space-between flex-wrap gap-4 mb-4">
+                <div class="d-flex align-center gap-3">
+                    <MudIcon Icon="@Icons.Material.Filled.CloudQueue" Color="Color.Primary" Style="color: #2C3E50;" />
+                    <div>
+                        <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Giám Sát Hạn Mức Firestore (Firebase Database)</MudText>
+                        <MudText Typo="Typo.caption" Class="text-secondary">Thống kê số lượng truy vấn đọc/ghi thực tế của hệ thống để quản lý định mức giới hạn gói miễn phí.</MudText>
+                    </div>
+                </div>
+                
+                <div class="d-flex align-center gap-2">
+                    <MudChip T="string" Color="Color.Secondary" Variant="Variant.Text" Icon="@Icons.Material.Filled.Timer" Size="Size.Small" Class="fw-bold" Style="background-color: #f8f9fa;">
+                        Hạn mức đặt lại sau: @GetTimeToNextReset()
+                    </MudChip>
                 </div>
             </div>
 
@@ -268,6 +277,7 @@
         public long DailyWriteLimit { get; set; } = 20000;
     }
 
+    private System.Threading.Timer? _resetTimer;
     private FirestoreUsageDto _usage = new();
     private bool _loading = true;
     private int _totalOrders = 0;
@@ -290,9 +300,14 @@
     {
         ChartPalette = new string[] { "#008080" } // Teal
     };
-
     protected override async Task OnInitializedAsync()
     {
+        // Start a timer to refresh the time left every 30 seconds
+        _resetTimer = new System.Threading.Timer(_ => 
+        {
+            InvokeAsync(StateHasChanged);
+        }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+
         try
         {
             // Fetch sales orders count
@@ -421,5 +436,28 @@
         if (percent >= 80) return "Cảnh Báo: Sắp Hết Định Mức!";
         if (percent >= 50) return "Trung Bình";
         return "An Toàn";
+    }
+
+    private string GetTimeToNextReset()
+    {
+        var now = DateTime.Now;
+        var resetToday = new DateTime(now.Year, now.Month, now.Day, 14, 0, 0);
+        DateTime nextReset;
+        if (now < resetToday)
+        {
+            nextReset = resetToday;
+        }
+        else
+        {
+            nextReset = resetToday.AddDays(1);
+        }
+
+        var timeLeft = nextReset - now;
+        return $"{(int)timeLeft.TotalHours}h {timeLeft.Minutes}m";
+    }
+
+    public void Dispose()
+    {
+        _resetTimer?.Dispose();
     }
 }

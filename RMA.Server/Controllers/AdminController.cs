@@ -186,6 +186,18 @@ namespace RMA.Server.Controllers
             }
         }
 
+        [HttpGet("firestore-metrics")]
+        public ActionResult GetFirestoreMetrics()
+        {
+            return Ok(new
+            {
+                TotalReads = FirestoreMetrics.TotalReads,
+                TotalWrites = FirestoreMetrics.TotalWrites,
+                DailyReadLimit = 50000,
+                DailyWriteLimit = 20000
+            });
+        }
+
         #endregion
 
         #region Sales Order Emergency Bypass

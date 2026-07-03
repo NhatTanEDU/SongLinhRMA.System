@@ -6,6 +6,31 @@ using Microsoft.Extensions.Caching.Memory;
 
 namespace RMA.Server.Services
 {
+    public static class FirestoreMetrics
+    {
+        private static long _totalReads = 0;
+        private static long _totalWrites = 0;
+
+        public static long TotalReads => _totalReads;
+        public static long TotalWrites => _totalWrites;
+
+        public static void IncrementReads(long count)
+        {
+            System.Threading.Interlocked.Add(ref _totalReads, count);
+        }
+
+        public static void IncrementWrites(long count)
+        {
+            System.Threading.Interlocked.Add(ref _totalWrites, count);
+        }
+
+        public static void Reset()
+        {
+            System.Threading.Interlocked.Exchange(ref _totalReads, 0);
+            System.Threading.Interlocked.Exchange(ref _totalWrites, 0);
+        }
+    }
+
     public class FirestoreRepository<T> where T : class
     {
         private readonly FirestoreDb _firestoreDb;
@@ -59,6 +84,8 @@ namespace RMA.Server.Services
 
             var collection = _firestoreDb.Collection(_collectionName);
             var snapshot = await collection.GetSnapshotAsync();
+            FirestoreMetrics.IncrementReads(Math.Max(1, snapshot.Documents.Count));
+
             var result = new List<T>();
             foreach (var document in snapshot.Documents)
             {
@@ -92,6 +119,8 @@ namespace RMA.Server.Services
 
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             var snapshot = await document.GetSnapshotAsync();
+            FirestoreMetrics.IncrementReads(1);
+
             T? result = null;
             if (snapshot.Exists)
             {
@@ -123,6 +152,8 @@ namespace RMA.Server.Services
             var collection = _firestoreDb.Collection(_collectionName);
             var query = collection.WhereEqualTo(fieldName, value);
             var snapshot = await query.GetSnapshotAsync();
+            FirestoreMetrics.IncrementReads(Math.Max(1, snapshot.Documents.Count));
+
             var result = new List<T>();
             foreach (var document in snapshot.Documents)
             {
@@ -157,6 +188,8 @@ namespace RMA.Server.Services
             var collection = _firestoreDb.Collection(_collectionName);
             var query = collection.Offset(offset).Limit(limit);
             var snapshot = await query.GetSnapshotAsync();
+            FirestoreMetrics.IncrementReads(Math.Max(1, snapshot.Documents.Count));
+
             var result = new List<T>();
             foreach (var document in snapshot.Documents)
             {
@@ -180,6 +213,7 @@ namespace RMA.Server.Services
         {
             var collection = _firestoreDb.Collection(_collectionName);
             var docRef = await collection.AddAsync(entity);
+            FirestoreMetrics.IncrementWrites(1);
             InvalidateCache();
             return docRef.Id;
         }
@@ -188,6 +222,7 @@ namespace RMA.Server.Services
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             await document.SetAsync(entity, SetOptions.Overwrite);
+            FirestoreMetrics.IncrementWrites(1);
             InvalidateCache();
         }
 
@@ -195,6 +230,7 @@ namespace RMA.Server.Services
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             await document.DeleteAsync();
+            FirestoreMetrics.IncrementWrites(1);
             InvalidateCache();
         }
     }

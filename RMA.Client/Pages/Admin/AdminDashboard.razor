@@ -83,6 +83,55 @@
             </MudItem>
         </MudGrid>
 
+        <!-- Firebase Firestore Resource Monitor -->
+        <MudPaper Elevation="3" Class="pa-6 rounded-xl mb-6 bg-white">
+            <div class="d-flex align-center gap-3 mb-4">
+                <MudIcon Icon="@Icons.Material.Filled.CloudQueue" Color="Color.Primary" Style="color: #2C3E50;" />
+                <div>
+                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Giám Sát Hạn Mức Firestore (Firebase Database)</MudText>
+                    <MudText Typo="Typo.caption" Class="text-secondary">Thống kê số lượng truy vấn đọc/ghi thực tế của hệ thống để quản lý định mức giới hạn gói miễn phí.</MudText>
+                </div>
+            </div>
+
+            <MudGrid>
+                <!-- Firestore Reads -->
+                <MudItem xs="12" md="6">
+                    <MudCard Outlined="true" Class="rounded-lg pa-4 shadow-none border-solid" Style="border-color: #e0e0e0;">
+                        <div class="d-flex align-center justify-space-between mb-2">
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@Icons.Material.Filled.RemoveRedEye" Color="Color.Info" />
+                                <MudText Typo="Typo.subtitle2" Class="fw-bold text-secondary">Số Lượt Đọc Document (Daily Reads)</MudText>
+                            </div>
+                            <MudText Typo="Typo.subtitle1" Class="fw-bold">@_usage.TotalReads.ToString("N0") / @_usage.DailyReadLimit.ToString("N0")</MudText>
+                        </div>
+                        <MudProgressLinear Color="@GetReadsProgressColor()" Value="@GetReadsProgressValue()" Size="Size.Large" Class="rounded-pill my-3" />
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.caption" Class="text-secondary">Phiên chạy hiện tại: @GetReadsProgressValue().ToString("F1")% định mức</MudText>
+                            <MudText Typo="Typo.caption" Class="fw-bold" Style="@($"color: {GetReadsColorHex()};")">@GetReadsStatusText()</MudText>
+                        </div>
+                    </MudCard>
+                </MudItem>
+
+                <!-- Firestore Writes -->
+                <MudItem xs="12" md="6">
+                    <MudCard Outlined="true" Class="rounded-lg pa-4 shadow-none border-solid" Style="border-color: #e0e0e0;">
+                        <div class="d-flex align-center justify-space-between mb-2">
+                            <div class="d-flex align-center gap-2">
+                                <MudIcon Icon="@Icons.Material.Filled.Edit" Color="Color.Success" />
+                                <MudText Typo="Typo.subtitle2" Class="fw-bold text-secondary">Số Lượt Ghi Document (Daily Writes)</MudText>
+                            </div>
+                            <MudText Typo="Typo.subtitle1" Class="fw-bold">@_usage.TotalWrites.ToString("N0") / @_usage.DailyWriteLimit.ToString("N0")</MudText>
+                        </div>
+                        <MudProgressLinear Color="@GetWritesProgressColor()" Value="@GetWritesProgressValue()" Size="Size.Large" Class="rounded-pill my-3" />
+                        <div class="d-flex justify-space-between">
+                            <MudText Typo="Typo.caption" Class="text-secondary">Phiên chạy hiện tại: @GetWritesProgressValue().ToString("F1")% định mức</MudText>
+                            <MudText Typo="Typo.caption" Class="fw-bold" Style="@($"color: {GetWritesColorHex()};")">@GetWritesStatusText()</MudText>
+                        </div>
+                    </MudCard>
+                </MudItem>
+            </MudGrid>
+        </MudPaper>
+
         <!-- Charts and Metrics Section -->
         <MudGrid Class="mb-6">
             <!-- SLA warning Donut Chart -->
@@ -211,6 +260,15 @@
 </style>
 
 @code {
+    public class FirestoreUsageDto
+    {
+        public long TotalReads { get; set; } = 0;
+        public long TotalWrites { get; set; } = 0;
+        public long DailyReadLimit { get; set; } = 50000;
+        public long DailyWriteLimit { get; set; } = 20000;
+    }
+
+    private FirestoreUsageDto _usage = new();
     private bool _loading = true;
     private int _totalOrders = 0;
     private int _totalStock = 0;
@@ -280,6 +338,20 @@
             {
                 _recentLogs = logs.Take(5).ToList();
             }
+
+            // Fetch firestore metrics
+            try
+            {
+                var usage = await Http.GetFromJsonAsync<FirestoreUsageDto>("api/admin/firestore-metrics");
+                if (usage != null)
+                {
+                    _usage = usage;
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error loading firestore metrics: {ex.Message}");
+            }
         }
         catch (Exception ex)
         {
@@ -289,5 +361,65 @@
         {
             _loading = false;
         }
+    }
+
+    private double GetReadsProgressValue()
+    {
+        if (_usage.DailyReadLimit <= 0) return 0;
+        return Math.Min(100.0, ((double)_usage.TotalReads / _usage.DailyReadLimit) * 100.0);
+    }
+
+    private Color GetReadsProgressColor()
+    {
+        var percent = GetReadsProgressValue();
+        if (percent >= 80) return Color.Error;
+        if (percent >= 50) return Color.Warning;
+        return Color.Info;
+    }
+
+    private string GetReadsColorHex()
+    {
+        var percent = GetReadsProgressValue();
+        if (percent >= 80) return "#d50000"; // Red
+        if (percent >= 50) return "#ffb300"; // Yellow
+        return "#00b0ff"; // Blue/Info
+    }
+
+    private string GetReadsStatusText()
+    {
+        var percent = GetReadsProgressValue();
+        if (percent >= 80) return "Cảnh Báo: Sắp Hết Định Mức!";
+        if (percent >= 50) return "Trung Bình";
+        return "An Toàn";
+    }
+
+    private double GetWritesProgressValue()
+    {
+        if (_usage.DailyWriteLimit <= 0) return 0;
+        return Math.Min(100.0, ((double)_usage.TotalWrites / _usage.DailyWriteLimit) * 100.0);
+    }
+
+    private Color GetWritesProgressColor()
+    {
+        var percent = GetWritesProgressValue();
+        if (percent >= 80) return Color.Error;
+        if (percent >= 50) return Color.Warning;
+        return Color.Success;
+    }
+
+    private string GetWritesColorHex()
+    {
+        var percent = GetWritesProgressValue();
+        if (percent >= 80) return "#d50000"; // Red
+        if (percent >= 50) return "#ffb300"; // Yellow
+        return "#4caf50"; // Green
+    }
+
+    private string GetWritesStatusText()
+    {
+        var percent = GetWritesProgressValue();
+        if (percent >= 80) return "Cảnh Báo: Sắp Hết Định Mức!";
+        if (percent >= 50) return "Trung Bình";
+        return "An Toàn";
     }
 }

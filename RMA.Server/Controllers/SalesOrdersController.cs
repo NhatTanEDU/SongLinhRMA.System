@@ -430,6 +430,102 @@ namespace RMA.Server.Controllers
             }
         }
 
+        [HttpGet("search")]
+        public async Task<ActionResult<SalesOrderSearchResultDto>> Search([FromQuery] string term)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                return BadRequest("Search term cannot be empty.");
+            }
+
+            try
+            {
+                var cleanTerm = term.Trim().ToUpper();
+                SalesOrder? matchedOrder = null;
+
+                // Step 1: Search by OrderCode
+                var ordersByCode = await _orderRepo.GetByFieldAsync("OrderCode", cleanTerm);
+                if (ordersByCode.Any())
+                {
+                    matchedOrder = ordersByCode.First();
+                }
+
+                // Step 2: Search by SerialNumber (if not matched by OrderCode)
+                if (matchedOrder == null)
+                {
+                    // Look up by ID directly O(1)
+                    var device = await _deviceRepo.GetByIdAsync(cleanTerm);
+                    if (device == null)
+                    {
+                        // Fallback 1: Query by field SerialNumber using original case
+                        var devicesBySerial = await _deviceRepo.GetByFieldAsync("SerialNumber", term.Trim());
+                        if (devicesBySerial.Any())
+                        {
+                            device = devicesBySerial.First();
+                        }
+                    }
+                    if (device == null)
+                    {
+                        // Fallback 2: Query by field SerialNumber using uppercase case
+                        var devicesBySerial = await _deviceRepo.GetByFieldAsync("SerialNumber", cleanTerm);
+                        if (devicesBySerial.Any())
+                        {
+                            device = devicesBySerial.First();
+                        }
+                    }
+
+                    if (device != null && !string.IsNullOrEmpty(device.OrderId))
+                    {
+                        matchedOrder = await _orderRepo.GetByIdAsync(device.OrderId);
+                    }
+                }
+
+                // If still null, we didn't find anything
+                if (matchedOrder == null)
+                {
+                    return NotFound("Không tìm thấy đơn hàng hoặc thiết bị tương ứng.");
+                }
+
+                // Fetch customer & model details
+                var customer = await _customerRepo.GetByIdAsync(matchedOrder.CustomerId);
+                var models = await GetAndFixModelsAsync();
+
+                // Fetch all devices associated with this order
+                var associatedDevices = await _deviceRepo.GetByFieldAsync("OrderId", matchedOrder.Id);
+
+                // Build DTO
+                var result = new SalesOrderSearchResultDto
+                {
+                    OrderId = matchedOrder.Id,
+                    OrderCode = matchedOrder.OrderCode ?? string.Empty,
+                    CustomerId = matchedOrder.CustomerId,
+                    CustomerName = customer?.Name ?? string.Empty,
+                    CustomerAvatarUrl = customer?.AvatarUrl ?? string.Empty,
+                    OrderDate = matchedOrder.OrderDate,
+                    DeliveryDate = matchedOrder.DeliveryDate,
+                    Status = matchedOrder.Status,
+                    SalesNote = matchedOrder.SalesNote ?? string.Empty,
+                    Details = matchedOrder.Details.Select(d => new OrderDetailDto
+                    {
+                        ModelId = d.ModelId,
+                        ModelName = models.ContainsKey(d.ModelId) ? models[d.ModelId].ModelName : string.Empty,
+                        Quantity = d.Quantity,
+                        WarrantyMonths = d.WarrantyMonths,
+                        DeviceSpecs = d.DeviceSpecs ?? string.Empty,
+                        Note = d.Note,
+                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired
+                    }).ToList(),
+                    AssociatedSerials = associatedDevices.Select(d => d.SerialNumber).Where(s => !string.IsNullOrEmpty(s)).ToList()
+                };
+
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
         private async Task<Dictionary<string, Model>> GetAndFixModelsAsync()
         {
             var modelsList = await _modelRepo.GetAllAsync();

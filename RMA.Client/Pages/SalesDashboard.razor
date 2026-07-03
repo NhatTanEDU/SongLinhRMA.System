@@ -85,11 +85,11 @@
                 }
                 else
                 {
-                <MudDataGrid Items="@_orders.Where(o => o.Status != "Delivered")" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                <MudDataGrid Items="@_orders.Where(o => o.Status != "Delivered")" QuickFilter="@_quickFilter" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
                     <ToolBarContent>
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Chưa Giao</MudText>
                         <MudSpacer />
-                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng, S/N..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="ExecuteSearch" OnKeyDown="OnSearchKeyDown" Clearable="true" OnClearButtonClick="ClearSearch" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
                     </ToolBarContent>
                     <Columns>
                         <TemplateColumn Title="Mã Đơn">
@@ -196,11 +196,11 @@
             }
             else
             {
-                <MudDataGrid Items="@_orders.Where(o => o.Status == "Delivered")" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                <MudDataGrid Items="@_orders.Where(o => o.Status == "Delivered")" QuickFilter="@_quickFilter" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
                     <ToolBarContent>
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Đã Giao</MudText>
                         <MudSpacer />
-                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng, S/N..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" OnAdornmentClick="ExecuteSearch" OnKeyDown="OnSearchKeyDown" Clearable="true" OnClearButtonClick="ClearSearch" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
                     </ToolBarContent>
                     <Columns>
                         <TemplateColumn Title="Mã Đơn">
@@ -275,6 +275,80 @@
     private bool _pendingRefresh = false;
     private string _searchString = "";
     private HubConnection? _hubConnection;
+
+    private async Task OnSearchKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await ExecuteSearch();
+        }
+    }
+
+    private async Task ClearSearch()
+    {
+        _searchString = "";
+        await LoadOrders();
+    }
+
+    private async Task ExecuteSearch()
+    {
+        if (string.IsNullOrWhiteSpace(_searchString))
+        {
+            await LoadOrders();
+            return;
+        }
+
+        var term = _searchString.Trim();
+        try
+        {
+            _loading = true;
+            StateHasChanged();
+
+            var response = await Http.GetAsync($"api/salesorders/search?term={Uri.EscapeDataString(term)}");
+            if (response.IsSuccessStatusCode)
+            {
+                var result = await response.Content.ReadFromJsonAsync<SalesOrderSearchResultDto>();
+                if (result != null)
+                {
+                    _orders = new List<SalesOrderDto>
+                    {
+                        new SalesOrderDto
+                        {
+                            Id = result.OrderId,
+                            OrderCode = result.OrderCode,
+                            CustomerId = result.CustomerId,
+                            CustomerName = result.CustomerName,
+                            OrderDate = result.OrderDate,
+                            DeliveryDate = result.DeliveryDate,
+                            Status = result.Status,
+                            SalesNote = result.SalesNote,
+                            CustomerAvatarUrl = result.CustomerAvatarUrl,
+                            Details = result.Details
+                        }
+                    };
+                    Snackbar.Add($"Tìm thấy đơn hàng: {result.OrderCode}", Severity.Success);
+                }
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                Snackbar.Add($"Không tìm thấy đơn hàng hoặc thiết bị khớp với S/N '{term}'", Severity.Warning);
+            }
+            else
+            {
+                var errorMsg = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Lỗi khi tìm kiếm: {errorMsg}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi kết nối: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    }
 
     private DashboardStats _stats = new();
 

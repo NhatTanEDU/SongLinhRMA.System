@@ -46,9 +46,17 @@
                 {
                     <MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Filled">Chờ Giao</MudChip>
                 }
-                else
+                else if (Order.Status == "Delivering")
+                {
+                    <MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Filled">Đang Giao</MudChip>
+                }
+                else if (Order.Status == "Delivered")
                 {
                     <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">Đã Giao</MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Filled">@Order.Status</MudChip>
                 }
             </MudItem>
             <MudItem xs="12" sm="6">
@@ -74,7 +82,24 @@
                         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Ghi chú dòng</MudText></MudTh>
                     </HeaderContent>
                     <RowTemplate>
-                        <MudTd DataLabel="Thiết bị">@context.ModelName</MudTd>
+                        <MudTd DataLabel="Thiết bị">
+                            <div>@context.ModelName</div>
+                            @if (Order.Status == "Delivered")
+                            {
+                                var modelSerials = _devices.Where(d => d.ModelId == context.ModelId && d.OrderId == Order.Id).Select(d => d.SerialNumber).ToList();
+                                @if (modelSerials.Any())
+                                {
+                                    <div class="mt-1 d-flex flex-wrap gap-1">
+                                        @foreach (var sn in modelSerials)
+                                        {
+                                            <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text" Class="ma-0 pa-1" Style="font-size: 11px; height: 20px;">
+                                                S/N: @sn
+                                            </MudChip>
+                                        }
+                                    </div>
+                                }
+                            }
+                        </MudTd>
                         <MudTd DataLabel="Số lượng">@context.Quantity</MudTd>
                         <MudTd DataLabel="Bảo hành">@context.WarrantyMonths tháng</MudTd>
                         <MudTd DataLabel="Ghi chú dòng">@context.Note</MudTd>

@@ -26,6 +26,7 @@ namespace RMA.Shared.DTOs
         public string DeviceSpecs { get; set; } = string.Empty;
         public string Note { get; set; } = string.Empty;
         public bool IsSerialRequired { get; set; }
+        public List<string> SerialNumbers { get; set; } = new List<string>();
     }
 
     public class SalesOrderCreateDto

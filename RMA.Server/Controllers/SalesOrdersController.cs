@@ -94,6 +94,7 @@ namespace RMA.Server.Controllers
                 var orders = await _orderRepo.GetAllAsync();
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
+                var devices = await _deviceRepo.GetAllAsync();
  
                 var dtos = orders.Select(o => new SalesOrderDto
                 {
@@ -114,7 +115,11 @@ namespace RMA.Server.Controllers
                         WarrantyMonths = d.WarrantyMonths,
                         DeviceSpecs = d.DeviceSpecs ?? string.Empty,
                         Note = d.Note,
-                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired
+                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired,
+                        SerialNumbers = devices.Where(dev => dev.ModelId == d.ModelId && dev.OrderId == o.Id)
+                                               .Select(dev => dev.SerialNumber)
+                                               .Where(sn => !string.IsNullOrEmpty(sn))
+                                               .ToList()
                     }).ToList()
                 }).OrderByDescending(o => o.OrderDate).ToList();
  
@@ -134,6 +139,7 @@ namespace RMA.Server.Controllers
                 var orders = await _orderRepo.GetByFieldAsync("Status", "Pending");
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
+                var devices = await _deviceRepo.GetAllAsync();
  
                 var dtos = orders.Select(o => new SalesOrderDto
                 {
@@ -154,7 +160,11 @@ namespace RMA.Server.Controllers
                         WarrantyMonths = d.WarrantyMonths,
                         DeviceSpecs = d.DeviceSpecs ?? string.Empty,
                         Note = d.Note,
-                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired
+                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired,
+                        SerialNumbers = devices.Where(dev => dev.ModelId == d.ModelId && dev.OrderId == o.Id)
+                                               .Select(dev => dev.SerialNumber)
+                                               .Where(sn => !string.IsNullOrEmpty(sn))
+                                               .ToList()
                     }).ToList()
                 }).OrderByDescending(o => o.OrderDate).ToList();
  
@@ -321,6 +331,13 @@ namespace RMA.Server.Controllers
 
                 WriteBatch batch = _firestoreDb.StartBatch();
 
+                // Clean up any existing devices for this order to prevent duplicates in case of re-delivery (direct query to bypass cache)
+                var existingDevicesSnapshot = await _firestoreDb.Collection("devices").WhereEqualTo("OrderId", order.Id).GetSnapshotAsync();
+                foreach (var doc in existingDevicesSnapshot.Documents)
+                {
+                    batch.Delete(doc.Reference);
+                }
+
                 var purchaseDate = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
 
                 foreach (var detail in order.Details)
@@ -401,6 +418,11 @@ namespace RMA.Server.Controllers
                 batch.Set(orderDocRef, order, SetOptions.Overwrite);
 
                 await batch.CommitAsync();
+
+                // Invalidate memory caches to sync with Firestore
+                _orderRepo.InvalidateCache();
+                _deviceRepo.InvalidateCache();
+                _modelRepo.InvalidateCache();
 
                 await _hubContext.Clients.All.SendAsync("OrderStateChanged");
                 return Ok();
@@ -513,7 +535,11 @@ namespace RMA.Server.Controllers
                         WarrantyMonths = d.WarrantyMonths,
                         DeviceSpecs = d.DeviceSpecs ?? string.Empty,
                         Note = d.Note,
-                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired
+                        IsSerialRequired = models.ContainsKey(d.ModelId) && models[d.ModelId].IsSerialRequired,
+                        SerialNumbers = associatedDevices.Where(dev => dev.ModelId == d.ModelId && dev.OrderId == matchedOrder.Id)
+                                                         .Select(dev => dev.SerialNumber)
+                                                         .Where(sn => !string.IsNullOrEmpty(sn))
+                                                         .ToList()
                     }).ToList(),
                     AssociatedSerials = associatedDevices.Select(d => d.SerialNumber).Where(s => !string.IsNullOrEmpty(s)).ToList()
                 };

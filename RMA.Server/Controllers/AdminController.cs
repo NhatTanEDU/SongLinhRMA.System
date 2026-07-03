@@ -268,6 +268,11 @@ namespace RMA.Server.Controllers
 
                 await batch.CommitAsync();
 
+                // Invalidate memory caches to sync with Firestore
+                _orderRepo.InvalidateCache();
+                _deviceRepo.InvalidateCache();
+                _modelRepo.InvalidateCache();
+
                 var newOrderJson = JsonSerializer.Serialize(order);
 
                 // Write Audit Log

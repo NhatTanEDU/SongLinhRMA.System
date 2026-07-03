@@ -56,7 +56,7 @@ namespace RMA.Server.Services
             return version;
         }
 
-        private void InvalidateCache()
+        public void InvalidateCache()
         {
             if (_cache == null) return;
             string key = $"col_{_collectionName}_version";

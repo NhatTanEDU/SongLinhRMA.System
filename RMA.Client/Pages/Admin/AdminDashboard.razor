@@ -96,6 +96,16 @@
                 </div>
                 
                 <div class="d-flex align-center gap-2">
+                    @if (_lastMetricsUpdate != null)
+                    {
+                        <MudChip T="string" Color="Color.Default" Variant="Variant.Text" Icon="@Icons.Material.Filled.AccessTime" Size="Size.Small" Style="background-color: #f8f9fa; color: #666;">
+                            Cập nhật: @_lastMetricsUpdate.Value.ToString("HH:mm:ss")
+                        </MudChip>
+                    }
+                    <MudTooltip Text="Làm mới số liệu ngay bây giờ">
+                        <MudIconButton Icon="@Icons.Material.Filled.Refresh" Color="Color.Primary" Size="Size.Small"
+                                       OnClick="RefreshMetricsAsync" Disabled="_metricsRefreshing" />
+                    </MudTooltip>
                     <MudChip T="string" Color="Color.Secondary" Variant="Variant.Text" Icon="@Icons.Material.Filled.Timer" Size="Size.Small" Class="fw-bold" Style="background-color: #f8f9fa;">
                         Hạn mức đặt lại sau: @GetTimeToNextReset()
                     </MudChip>
@@ -278,6 +288,9 @@
     }
 
     private System.Threading.Timer? _resetTimer;
+    private System.Threading.Timer? _metricsRefreshTimer;
+    private DateTime? _lastMetricsUpdate = null;
+    private bool _metricsRefreshing = false;
     private FirestoreUsageDto _usage = new();
     private bool _loading = true;
     private int _totalOrders = 0;
@@ -302,11 +315,17 @@
     };
     protected override async Task OnInitializedAsync()
     {
-        // Start a timer to refresh the time left every 30 seconds
+        // Timer to refresh the quota reset countdown every 30 seconds
         _resetTimer = new System.Threading.Timer(_ => 
         {
             InvokeAsync(StateHasChanged);
         }, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
+
+        // Timer to auto-refresh Firestore metrics every 60 seconds
+        _metricsRefreshTimer = new System.Threading.Timer(async _ =>
+        {
+            await InvokeAsync(RefreshMetricsAsync);
+        }, null, TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(60));
 
         try
         {
@@ -375,6 +394,27 @@
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task RefreshMetricsAsync()
+    {
+        _metricsRefreshing = true;
+        StateHasChanged();
+        try
+        {
+            var usage = await Http.GetFromJsonAsync<FirestoreUsageDto>("api/admin/firestore-metrics");
+            if (usage != null)
+            {
+                _usage = usage;
+                _lastMetricsUpdate = DateTime.Now;
+            }
+        }
+        catch { }
+        finally
+        {
+            _metricsRefreshing = false;
+            StateHasChanged();
         }
     }
 
@@ -459,5 +499,6 @@
     public void Dispose()
     {
         _resetTimer?.Dispose();
+        _metricsRefreshTimer?.Dispose();
     }
 }

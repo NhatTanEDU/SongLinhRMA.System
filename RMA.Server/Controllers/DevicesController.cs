@@ -122,6 +122,7 @@ public class DevicesController : ControllerBase
     [HttpGet("by-serial/{serialNumber}")]
     public async Task<ActionResult<DeviceDto>> GetBySerialNumber(string serialNumber)
     {
+        // v2: multi-case fallback for legacy data compatibility
         if (string.IsNullOrWhiteSpace(serialNumber)) return BadRequest("S/N không được để trống.");
         
         var normalizedSn = serialNumber.Trim().ToUpper();

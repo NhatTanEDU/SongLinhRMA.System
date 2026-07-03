@@ -129,11 +129,31 @@ public class DevicesController : ControllerBase
         // Step 1 (Priority): Fast direct lookup by Document ID (O(1) complexity)
         var d = await _deviceRepo.GetByIdAsync(normalizedSn);
         
-        // Step 2 (Fallback): Query by field if document ID wasn't normalized (backwards compatibility)
+        // Step 2 (Fallback): Query by SerialNumber field - try original, UPPER and lower case
+        // because old data may have been saved without normalization
         if (d == null)
         {
-            var devices = await _deviceRepo.GetByFieldAsync("SerialNumber", serialNumber.Trim());
-            d = devices.FirstOrDefault();
+            var snOriginal = serialNumber.Trim();
+            var snUpper = snOriginal.ToUpper();
+            var snLower = snOriginal.ToLower();
+
+            // Try UPPER first (current convention)
+            var devicesUpper = await _deviceRepo.GetByFieldAsync("SerialNumber", snUpper);
+            d = devicesUpper.FirstOrDefault();
+
+            // Try original casing
+            if (d == null && snOriginal != snUpper)
+            {
+                var devicesOrig = await _deviceRepo.GetByFieldAsync("SerialNumber", snOriginal);
+                d = devicesOrig.FirstOrDefault();
+            }
+
+            // Try lower casing as last resort
+            if (d == null && snLower != snOriginal && snLower != snUpper)
+            {
+                var devicesLower = await _deviceRepo.GetByFieldAsync("SerialNumber", snLower);
+                d = devicesLower.FirstOrDefault();
+            }
         }
 
         if (d == null) return NotFound("Không tìm thấy S/N trong hệ thống.");

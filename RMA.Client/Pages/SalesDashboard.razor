@@ -72,6 +72,51 @@
         </MudItem>
     </MudGrid>
 
+    <!-- Advanced Filter Panel -->
+    <MudPaper Elevation="3" Class="pa-4 rounded-xl mb-6 bg-white">
+        <div class="d-flex align-center justify-space-between flex-wrap gap-4">
+            <div class="d-flex align-center gap-3">
+                <MudIcon Icon="@Icons.Material.Filled.FilterList" Color="Color.Primary" Style="color: #0072BC;" />
+                <MudText Typo="Typo.subtitle1" Class="fw-bold" Style="color: #0072BC;">Bộ Lọc Đơn Hàng</MudText>
+            </div>
+            
+            <div class="d-flex align-center flex-wrap gap-4" style="flex: 1; justify-content: flex-end;">
+                <!-- Filter by Customer -->
+                <MudSelect T="string" Label="Khách hàng" @bind-Value="_selectedCustomerId" AnchorOrigin="Origin.BottomCenter" Variant="Variant.Outlined" Margin="Margin.Dense" Class="rounded-lg" Style="min-width: 220px; background-color: #f8f9fa;">
+                    <MudSelectItem Value='""'>Tất cả khách hàng</MudSelectItem>
+                    @foreach (var c in _customers)
+                    {
+                        <MudSelectItem Value="@c.Id">@c.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                <!-- Filter by Date -->
+                <MudSelect T="string" Label="Thời gian" @bind-Value="_selectedDateFilter" AnchorOrigin="Origin.BottomCenter" Variant="Variant.Outlined" Margin="Margin.Dense" Class="rounded-lg" Style="min-width: 180px; background-color: #f8f9fa;">
+                    <MudSelectItem Value='"All"'>Tất cả thời gian</MudSelectItem>
+                    <MudSelectItem Value='"Today"'>Hôm nay</MudSelectItem>
+                    <MudSelectItem Value='"Yesterday"'>Hôm qua</MudSelectItem>
+                    <MudSelectItem Value='"Last7Days"'>7 ngày gần đây</MudSelectItem>
+                    <MudSelectItem Value='"LastWeek"'>Tuần trước (T2 - CN)</MudSelectItem>
+                    <MudSelectItem Value='"ThisMonth"'>Tháng này</MudSelectItem>
+                    <MudSelectItem Value='"Custom"'>Tùy chọn khoảng ngày</MudSelectItem>
+                </MudSelect>
+
+                @if (_selectedDateFilter == "Custom")
+                {
+                    <MudDateRangePicker Label="Chọn khoảng ngày" @bind-DateRange="_selectedDateRange" AutoClose="true" Variant="Variant.Outlined" Margin="Margin.Dense" Class="rounded-lg" Style="width: 260px; background-color: #f8f9fa;" />
+                }
+                
+                <!-- Reset Filters Button -->
+                @if (!string.IsNullOrEmpty(_selectedCustomerId) || _selectedDateFilter != "All" || !string.IsNullOrEmpty(_searchString))
+                {
+                    <MudButton Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Filled.FilterListOff" OnClick="ResetAllFilters" Class="fw-bold">
+                        Xoá bộ lọc
+                    </MudButton>
+                }
+            </div>
+        </div>
+    </MudPaper>
+
     <!-- Tabs Content -->
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="rounded-xl">
         <!-- Tab 1: Un-delivered Orders -->
@@ -85,7 +130,7 @@
                 }
                 else
                 {
-                <MudDataGrid Items="@_orders.Where(o => o.Status != "Delivered")" QuickFilter="@_quickFilter" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                <MudDataGrid Items="@GetFilteredOrders(false)" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
                     <ToolBarContent>
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Chưa Giao</MudText>
                         <MudSpacer />
@@ -196,7 +241,7 @@
             }
             else
             {
-                <MudDataGrid Items="@_orders.Where(o => o.Status == "Delivered")" QuickFilter="@_quickFilter" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
+                <MudDataGrid Items="@GetFilteredOrders(true)" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
                     <ToolBarContent>
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Đã Giao</MudText>
                         <MudSpacer />
@@ -276,6 +321,10 @@
     private string _searchString = "";
     private HubConnection? _hubConnection;
     private bool _isSearchResult = false;
+    private List<CustomerDto> _customers = new();
+    private string _selectedCustomerId = "";
+    private string _selectedDateFilter = "All";
+    private DateRange _selectedDateRange = new DateRange();
 
     private async Task OnSearchKeyDown(KeyboardEventArgs e)
     {
@@ -300,6 +349,11 @@
             await LoadOrders();
             return;
         }
+
+        // Reset other filters to avoid conflicts with search results
+        _selectedCustomerId = "";
+        _selectedDateFilter = "All";
+        _selectedDateRange = new DateRange();
 
         var term = _searchString.Trim();
         try
@@ -362,6 +416,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadOrders();
+        await LoadCustomers();
 
         _hubConnection = new HubConnectionBuilder()
             .WithUrl(new Uri(Http.BaseAddress!, "salesHub"))
@@ -384,6 +439,101 @@
         {
             Console.WriteLine($"SignalR connection failed: {ex.Message}");
         }
+    }
+
+    private async Task LoadCustomers()
+    {
+        try
+        {
+            _customers = await Http.GetFromJsonAsync<List<CustomerDto>>("api/customers") ?? new List<CustomerDto>();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading customers: {ex.Message}");
+        }
+    }
+
+    private void ResetAllFilters()
+    {
+        _selectedCustomerId = "";
+        _selectedDateFilter = "All";
+        _selectedDateRange = new DateRange();
+        _searchString = "";
+        _isSearchResult = false;
+    }
+
+    private IEnumerable<SalesOrderDto> GetFilteredOrders(bool deliveredOnly)
+    {
+        var query = _orders.AsEnumerable();
+
+        // 1. Filter by Status
+        if (deliveredOnly)
+        {
+            query = query.Where(o => o.Status == "Delivered");
+        }
+        else
+        {
+            query = query.Where(o => o.Status != "Delivered");
+        }
+
+        // 2. Filter by Customer ID
+        if (!string.IsNullOrEmpty(_selectedCustomerId))
+        {
+            query = query.Where(o => o.CustomerId == _selectedCustomerId);
+        }
+
+        // 3. Filter by Date Filter
+        if (_selectedDateFilter != "All")
+        {
+            var today = DateTime.Today;
+            if (_selectedDateFilter == "Today")
+            {
+                query = query.Where(o => o.OrderDate.ToLocalTime().Date == today);
+            }
+            else if (_selectedDateFilter == "Yesterday")
+            {
+                var yesterday = today.AddDays(-1);
+                query = query.Where(o => o.OrderDate.ToLocalTime().Date == yesterday);
+            }
+            else if (_selectedDateFilter == "Last7Days")
+            {
+                var limitDate = today.AddDays(-7);
+                query = query.Where(o => o.OrderDate.ToLocalTime().Date >= limitDate);
+            }
+            else if (_selectedDateFilter == "LastWeek")
+            {
+                // Last week: previous Monday to Sunday
+                var diff = (int)today.DayOfWeek - (int)DayOfWeek.Monday;
+                if (diff < 0) diff += 7;
+                var currentMonday = today.AddDays(-diff);
+                var lastMonday = currentMonday.AddDays(-7);
+                var lastSunday = currentMonday.AddDays(-1);
+                query = query.Where(o => o.OrderDate.ToLocalTime().Date >= lastMonday && o.OrderDate.ToLocalTime().Date <= lastSunday);
+            }
+            else if (_selectedDateFilter == "ThisMonth")
+            {
+                var startOfMonth = new DateTime(today.Year, today.Month, 1);
+                query = query.Where(o => o.OrderDate.ToLocalTime().Date >= startOfMonth);
+            }
+            else if (_selectedDateFilter == "Custom" && _selectedDateRange != null && _selectedDateRange.Start.HasValue && _selectedDateRange.End.HasValue)
+            {
+                var start = _selectedDateRange.Start.Value.Date;
+                var end = _selectedDateRange.End.Value.Date;
+                query = query.Where(o => o.OrderDate.ToLocalTime().Date >= start && o.OrderDate.ToLocalTime().Date <= end);
+            }
+        }
+
+        // 4. Apply text search if not empty and not a server search result
+        if (!string.IsNullOrWhiteSpace(_searchString) && !_isSearchResult)
+        {
+            query = query.Where(x => 
+                (!string.IsNullOrEmpty(x.OrderCode) && x.OrderCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(x.CustomerName) && x.CustomerName.Contains(_searchString, StringComparison.OrdinalIgnoreCase)) ||
+                (!string.IsNullOrEmpty(x.SalesNote) && x.SalesNote.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
+            );
+        }
+
+        return query.ToList();
     }
 
     private async Task LoadOrders()

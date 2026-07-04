@@ -16,6 +16,8 @@
         <MudText Typo="Typo.h5" Class="ml-3 fw-bold">SOLICOM TECH & SERVICE</MudText>
         <MudSpacer />
         
+        <RMA.Client.Components.Shared.GlobalSearchBar />
+
         <MudBadge Content="@_pendingCount" Color="Color.Error" Overlap="true" Visible="@(_pendingCount > 0)" Class="mr-5">
             <MudIconButton Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Inherit" OnClick="OpenPendingDeliveries" title="Đơn chờ giao" />
         </MudBadge>

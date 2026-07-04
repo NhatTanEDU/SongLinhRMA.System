@@ -19,17 +19,29 @@ public class DevicesController : ControllerBase
     private readonly FirestoreRepository<Customer> _customerRepo;
     private readonly FirestoreRepository<Model> _modelRepo;
     private readonly FirestoreRepository<SalesOrder> _orderRepo;
+    private readonly FirestoreRepository<RmaTicket> _ticketRepo;
+    private readonly FirestoreRepository<StatusHistory> _statusHistoryRepo;
+    private readonly FirestoreRepository<StatusMaster> _statusMasterRepo;
+    private readonly FirestoreRepository<Location> _locationRepo;
 
     public DevicesController(
         FirestoreRepository<Device> deviceRepo,
         FirestoreRepository<Customer> customerRepo,
         FirestoreRepository<Model> modelRepo,
-        FirestoreRepository<SalesOrder> orderRepo)
+        FirestoreRepository<SalesOrder> orderRepo,
+        FirestoreRepository<RmaTicket> ticketRepo,
+        FirestoreRepository<StatusHistory> statusHistoryRepo,
+        FirestoreRepository<StatusMaster> statusMasterRepo,
+        FirestoreRepository<Location> locationRepo)
     {
         _deviceRepo = deviceRepo;
         _customerRepo = customerRepo;
         _modelRepo = modelRepo;
         _orderRepo = orderRepo;
+        _ticketRepo = ticketRepo;
+        _statusHistoryRepo = statusHistoryRepo;
+        _statusMasterRepo = statusMasterRepo;
+        _locationRepo = locationRepo;
     }
 
     [HttpGet]
@@ -241,5 +253,124 @@ public class DevicesController : ControllerBase
     {
         await _deviceRepo.DeleteAsync(id);
         return NoContent();
+    }
+
+    [HttpGet("{serialNumber}/lifecycle")]
+    public async Task<ActionResult<DeviceLifecycleDto>> GetLifecycle(string serialNumber)
+    {
+        // 1. Try get device by ID (SerialNumber uppercase)
+        var deviceId = serialNumber.ToUpper();
+        var device = await _deviceRepo.GetByIdAsync(deviceId);
+        
+        if (device == null)
+        {
+            // Fallback to query
+            var devices = await _deviceRepo.GetByFieldAsync("SerialNumber", serialNumber);
+            device = devices.FirstOrDefault();
+            if (device == null)
+            {
+                return NotFound("Device not found.");
+            }
+        }
+
+        // 2. Parallel fetch
+        var customerTask = !string.IsNullOrEmpty(device.CustomerId) 
+            ? _customerRepo.GetByIdAsync(device.CustomerId) 
+            : Task.FromResult<Customer?>(null);
+            
+        var modelTask = !string.IsNullOrEmpty(device.ModelId) 
+            ? _modelRepo.GetByIdAsync(device.ModelId) 
+            : Task.FromResult<Model?>(null);
+        
+        Task<SalesOrder?> orderTask = Task.FromResult<SalesOrder?>(null);
+        if (!string.IsNullOrEmpty(device.OrderId))
+        {
+            orderTask = _orderRepo.GetByIdAsync(device.OrderId);
+        }
+
+        var rmaTicketsTask = _ticketRepo.GetByFieldAsync("DeviceId", device.Id);
+        
+        await Task.WhenAll(customerTask, modelTask, orderTask, rmaTicketsTask);
+        
+        var customer = customerTask.Result;
+        var model = modelTask.Result;
+        var order = orderTask.Result;
+        var rmaTickets = rmaTicketsTask.Result;
+
+        // 3. Status Histories batch fetch
+        var ticketIds = rmaTickets.Select(t => t.Id).ToList<object>();
+        var allHistories = new List<StatusHistory>();
+        
+        if (ticketIds.Any())
+        {
+            var historiesTask = _statusHistoryRepo.GetByFieldInAsync("RmaTicketId", ticketIds);
+            var statusMasterTask = _statusMasterRepo.GetAllAsync();
+            var locationTask = _locationRepo.GetAllAsync();
+            
+            await Task.WhenAll(historiesTask, statusMasterTask, locationTask);
+            
+            allHistories = historiesTask.Result;
+            var statusDict = statusMasterTask.Result.ToDictionary(s => s.Id, s => s.StatusName);
+            var locationDict = locationTask.Result.ToDictionary(l => l.Id, l => l.Name);
+            
+            // Map histories and tickets
+            var dto = new DeviceLifecycleDto
+            {
+                DeviceInfo = new DeviceLifecycleInfoDto
+                {
+                    SerialNumber = device.SerialNumber,
+                    ModelName = model?.ModelName ?? string.Empty,
+                    Brand = model?.Brand ?? string.Empty,
+                    WarrantyExpiry = device.WarrantyExpiry
+                },
+                SalesInfo = new DeviceLifecycleSalesInfoDto
+                {
+                    OrderCode = order?.OrderCode ?? device.OrderCode,
+                    DeliveryDate = order?.DeliveryDate,
+                    CustomerName = customer?.Name
+                },
+                RmaTickets = rmaTickets.OrderByDescending(t => t.ReceivedDate).Select(t => new RmaTicketTimelineDto
+                {
+                    TicketId = t.Id,
+                    ReceivedDate = t.ReceivedDate,
+                    ServiceMode = t.ServiceMode,
+                    ProblemDescription = t.ProblemDescription,
+                    StatusName = t.StatusId != null && statusDict.ContainsKey(t.StatusId) ? statusDict[t.StatusId] : t.StatusId ?? string.Empty,
+                    StatusHistories = allHistories.Where(h => h.RmaTicketId == t.Id)
+                                        .OrderBy(h => h.UpdateTime)
+                                        .Select(h => new StatusHistoryTimelineDto
+                                        {
+                                            UpdateTime = h.UpdateTime,
+                                            LocationName = h.LocationId != null && locationDict.ContainsKey(h.LocationId) ? locationDict[h.LocationId] : string.Empty,
+                                            Note = h.Note
+                                        }).ToList()
+                }).ToList()
+            };
+            
+            return Ok(dto);
+        }
+        else
+        {
+             // No tickets
+             var dto = new DeviceLifecycleDto
+            {
+                DeviceInfo = new DeviceLifecycleInfoDto
+                {
+                    SerialNumber = device.SerialNumber,
+                    ModelName = model?.ModelName ?? string.Empty,
+                    Brand = model?.Brand ?? string.Empty,
+                    WarrantyExpiry = device.WarrantyExpiry
+                },
+                SalesInfo = new DeviceLifecycleSalesInfoDto
+                {
+                    OrderCode = order?.OrderCode ?? device.OrderCode,
+                    DeliveryDate = order?.DeliveryDate,
+                    CustomerName = customer?.Name
+                },
+                RmaTickets = new List<RmaTicketTimelineDto>()
+            };
+            
+            return Ok(dto);
+        }
     }
 }

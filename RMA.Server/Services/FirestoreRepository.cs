@@ -209,6 +209,32 @@ namespace RMA.Server.Services
             return result;
         }
 
+        public virtual async Task<List<T>> GetByFieldInAsync(string fieldName, IEnumerable<object> values)
+        {
+            var valueList = values.ToList();
+            if (!valueList.Any()) return new List<T>();
+
+            var result = new List<T>();
+            // Firestore WhereIn limit is 10
+            for (int i = 0; i < valueList.Count; i += 10)
+            {
+                var chunk = valueList.Skip(i).Take(10).ToList();
+                var collection = _firestoreDb.Collection(_collectionName);
+                var query = collection.WhereIn(fieldName, chunk);
+                var snapshot = await query.GetSnapshotAsync();
+                FirestoreMetrics.IncrementReads(Math.Max(1, snapshot.Documents.Count));
+                
+                foreach (var document in snapshot.Documents)
+                {
+                    if (document.Exists)
+                    {
+                        result.Add(document.ConvertTo<T>());
+                    }
+                }
+            }
+            return result;
+        }
+
         public virtual async Task<string> AddAsync(T entity)
         {
             var collection = _firestoreDb.Collection(_collectionName);

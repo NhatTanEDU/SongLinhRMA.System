@@ -1,0 +1,165 @@
+@page "/search"
+@using RMA.Shared.DTOs
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<PageTitle>Global Search - Device Lifecycle</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="mt-6">
+    <MudText Typo="Typo.h5" Class="mb-4">Tra cứu Vòng đời thiết bị</MudText>
+    
+    <MudCard Elevation="3" Class="mb-6 p-4">
+        <MudCardContent>
+            <MudTextField @bind-Value="searchTerm" Label="Nhập Serial Number (S/N) và nhấn Enter" 
+                          Adornment="Adornment.End" AdornmentIcon="@Icons.Material.Filled.Search"
+                          OnAdornmentClick="SearchLifecycle"
+                          OnKeyDown="OnKeyDown"
+                          Placeholder="Ví dụ: SN123456" 
+                          Variant="Variant.Outlined" 
+                          Immediate="true"/>
+            @if (isLoading)
+            {
+                <MudProgressLinear Color="Color.Primary" Indeterminate="true" Class="mt-4" />
+            }
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@errorMessage</MudAlert>
+            }
+        </MudCardContent>
+    </MudCard>
+
+    @if (lifecycleData != null)
+    {
+        <MudCard Elevation="3" Class="mb-6">
+            <MudCardHeader>
+                <CardHeaderContent>
+                    <MudText Typo="Typo.h6" Color="Color.Primary">Thông tin thiết bị</MudText>
+                </CardHeaderContent>
+            </MudCardHeader>
+            <MudCardContent>
+                <MudGrid>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.body2"><b>S/N:</b> @lifecycleData.DeviceInfo.SerialNumber</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.body2"><b>Model:</b> @lifecycleData.DeviceInfo.ModelName</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.body2"><b>Thương hiệu:</b> @lifecycleData.DeviceInfo.Brand</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.body2"><b>Hết hạn bảo hành:</b> @(lifecycleData.DeviceInfo.WarrantyExpiry?.ToString("dd/MM/yyyy") ?? "N/A")</MudText>
+                    </MudItem>
+                </MudGrid>
+            </MudCardContent>
+        </MudCard>
+
+        <MudTimeline TimelinePosition="TimelinePosition.Start" Class="mt-6">
+            <!-- Mốc 1: Bán hàng -->
+            @if (!string.IsNullOrEmpty(lifecycleData.SalesInfo.OrderCode))
+            {
+                <MudTimelineItem Color="Color.Info" Icon="@Icons.Material.Filled.LocalShipping">
+                    <MudText Typo="Typo.subtitle1" Color="Color.Info"><b>Đơn hàng bán ra</b></MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Đơn hàng: <b>@lifecycleData.SalesInfo.OrderCode</b><br />
+                        Khách hàng: <b>@lifecycleData.SalesInfo.CustomerName</b><br />
+                        Ngày giao: <b>@(lifecycleData.SalesInfo.DeliveryDate?.ToString("dd/MM/yyyy") ?? "Chưa giao")</b>
+                    </MudText>
+                </MudTimelineItem>
+            }
+            
+            <!-- Mốc 2: Các ca bảo hành RMA -->
+            @foreach (var ticket in lifecycleData.RmaTickets)
+            {
+                <MudTimelineItem Color="Color.Warning" Icon="@Icons.Material.Filled.Build">
+                    <MudText Typo="Typo.subtitle1" Color="Color.Warning"><b>Tiếp nhận máy lỗi - Phiếu RMA #@ticket.TicketId</b></MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                        Ngày nhận: <b>@ticket.ReceivedDate.ToString("dd/MM/yyyy")</b><br/>
+                        Chế độ xử lý: <b>@(ticket.ServiceMode ?? "N/A")</b><br/>
+                        Lý do hỏng: <b>@ticket.ProblemDescription</b>
+                    </MudText>
+                </MudTimelineItem>
+
+                <!-- Các mốc lịch sử con của RMA Ticket -->
+                @foreach(var history in ticket.StatusHistories)
+                {
+                    <MudTimelineItem Size="Size.Small" Color="Color.Default" TimelineAlign="TimelineAlign.End">
+                        <MudText Typo="Typo.body2"><b>@history.UpdateTime.ToString("dd/MM/yyyy HH:mm")</b>: @history.Note</MudText>
+                        @if (!string.IsNullOrEmpty(history.LocationName))
+                        {
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Vị trí: @history.LocationName</MudText>
+                        }
+                    </MudTimelineItem>
+                }
+                
+                <!-- Trạng thái hiện tại của RMA -->
+                <MudTimelineItem Size="Size.Small" Color="Color.Success">
+                    <MudText Typo="Typo.body2" Color="Color.Success"><b>Trạng thái: @ticket.StatusName</b></MudText>
+                </MudTimelineItem>
+            }
+        </MudTimeline>
+    }
+</MudContainer>
+
+@code {
+    [SupplyParameterFromQuery(Name = "q")]
+    public string? Query { get; set; }
+
+    private string searchTerm = string.Empty;
+    private bool isLoading = false;
+    private string errorMessage = string.Empty;
+    private DeviceLifecycleDto? lifecycleData = null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(Query) && searchTerm != Query)
+        {
+            searchTerm = Query;
+            await SearchLifecycle();
+        }
+    }
+
+    private async Task OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SearchLifecycle();
+        }
+    }
+
+    private async Task SearchLifecycle()
+    {
+        if (string.IsNullOrWhiteSpace(searchTerm)) return;
+
+        isLoading = true;
+        errorMessage = string.Empty;
+        lifecycleData = null;
+        StateHasChanged();
+
+        try
+        {
+            var response = await Http.GetAsync($"api/devices/{searchTerm.Trim()}/lifecycle");
+            if (response.IsSuccessStatusCode)
+            {
+                lifecycleData = await response.Content.ReadFromJsonAsync<DeviceLifecycleDto>();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                errorMessage = "Không tìm thấy thiết bị nào với S/N cung cấp.";
+            }
+            else
+            {
+                errorMessage = "Lỗi tải dữ liệu vòng đời thiết bị.";
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = $"Lỗi: {ex.Message}";
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

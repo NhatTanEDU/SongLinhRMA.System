@@ -1,0 +1,26 @@
+@inject NavigationManager NavigationManager
+
+<div style="width: 300px;" class="mr-4">
+    <MudTextField @bind-Value="searchTerm" 
+                  Placeholder="Tìm S/N thiết bị..." 
+                  Variant="Variant.Outlined" 
+                  Margin="Margin.Dense"
+                  Adornment="Adornment.Start" 
+                  AdornmentIcon="@Icons.Material.Filled.Search"
+                  OnKeyDown="OnKeyDown"
+                  Immediate="true"
+                  Style="background-color: white; border-radius: 4px;" />
+</div>
+
+@code {
+    private string searchTerm = string.Empty;
+
+    private void OnKeyDown(Microsoft.AspNetCore.Components.Web.KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(searchTerm))
+        {
+            NavigationManager.NavigateTo($"/search?q={Uri.EscapeDataString(searchTerm.Trim())}");
+            searchTerm = string.Empty; // clear after search if desired, or keep it
+        }
+    }
+}

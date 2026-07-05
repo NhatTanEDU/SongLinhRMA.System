@@ -28,7 +28,7 @@
         <MudGrid>
             @foreach (var order in _orders)
             {
-                <MudItem xs="12" md="6" lg="4">
+                <MudItem xs="12" md="6" lg="4" @key="order.Id">
                     <MudPaper Elevation="3" Class="pa-6 rounded-xl position-relative h-100 d-flex flex-column justify-space-between" Style="@($"border-left: 6px solid {(order.Status == "Delivering" ? "#0072BC" : "#FFF200")};")">
                         <div>
                             <div class="d-flex justify-space-between align-center mb-3">
@@ -55,7 +55,7 @@
                             <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">Chi tiết sản phẩm:</MudText>
                             @foreach (var d in order.Details)
                             {
-                                <div class="d-flex justify-space-between align-center py-1">
+                                <div class="d-flex justify-space-between align-center py-1" @key="d.ModelName">
                                     <MudText Typo="Typo.caption" Style="max-width: 70%;" Class="text-truncate">@d.ModelName (@d.DeviceSpecs)</MudText>
                                     <MudText Typo="Typo.caption" Class="fw-bold">SL: @d.Quantity</MudText>
                                 </div>
@@ -153,6 +153,7 @@
 
         try
         {
+            _orders.Clear();
             var request = new HttpRequestMessage(HttpMethod.Get, "api/salesorders");
             request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
             {

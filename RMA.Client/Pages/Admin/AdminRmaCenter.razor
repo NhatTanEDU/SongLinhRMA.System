@@ -255,6 +255,7 @@
         _loading = true;
         try
         {
+            _tickets.Clear();
             // Load Active Tickets
             var rawTickets = await Http.GetFromJsonAsync<List<RmaTicketDto>>("api/rmatickets") ?? new();
             _tickets = rawTickets.Where(t => !t.StatusName.Equals("Closed", StringComparison.OrdinalIgnoreCase)).ToList();

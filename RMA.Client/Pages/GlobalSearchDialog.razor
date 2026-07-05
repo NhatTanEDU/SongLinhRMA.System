@@ -149,7 +149,7 @@
                 {
                     @foreach (var ticket in _lifecycleData.RmaHistory)
                     {
-                        <MudPaper Class="pa-4 mb-4 rounded-xl border border-solid" Elevation="1" Style="border-color: #eaeaea;">
+                        <MudPaper Class="pa-4 mb-4 rounded-xl border border-solid" Elevation="1" Style="border-color: #eaeaea;" @key="ticket.TicketId">
                             <div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-2">
                                 <div class="d-flex align-center gap-2">
                                     <MudText Typo="Typo.subtitle1" Class="fw-bold">Phiếu: @ticket.TicketId</MudText>

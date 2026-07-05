@@ -331,6 +331,9 @@
 
     private async Task LoadData()
     {
+        allTickets.Clear();
+        tickets.Clear();
+
         var ticketsTask = TicketService.GetRmaTicketsAsync();
         var statusesTask = TicketService.GetStatusesAsync();
         var customersTask = CustomerService.GetCustomersAsync();
@@ -403,14 +406,9 @@
         var dialog = await DialogService.ShowAsync<RmaTicketDialog>("Tạo RMA Ticket Mới", parameters, options);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled && result.Data is RmaTicketDto newTicket)
+        if (result != null && !result.Canceled)
         {
-            var created = await TicketService.CreateRmaTicketAsync(newTicket);
-            if (created != null)
-            {
-                Snackbar.Add("Tạo RMA Ticket thành công!", Severity.Success);
-                await LoadData();
-            }
+            await LoadData();
         }
     }
 

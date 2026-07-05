@@ -322,6 +322,7 @@
 
         try
         {
+            _orders.Clear();
             var queryParams = new List<string>();
             if (!string.IsNullOrEmpty(_filterQuery.SearchTerm)) queryParams.Add($"SearchTerm={Uri.EscapeDataString(_filterQuery.SearchTerm)}");
             if (!string.IsNullOrEmpty(_filterQuery.CustomerId)) queryParams.Add($"CustomerId={Uri.EscapeDataString(_filterQuery.CustomerId)}");

@@ -122,7 +122,7 @@
                 else
                 {
                     var currentEnum = TicketStatusHelper.ParseFromDbString(ticketDto.StatusId);
-                    <MudSelect T="TicketStatus" Value="@currentEnum" ValueChanged="@((newStatus) => OnQuickStatusChangedEnum(ticketDto, newStatus))" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="@($"min-width: 190px; margin-top: 0; color: {TicketStatusHelper.GetColorCode(currentEnum)}; font-weight: 500;")">
+                    <MudSelect T="TicketStatus" Value="@currentEnum" ValueChanged="@((newStatus) => OnQuickStatusChangedEnum(ticketDto, newStatus))" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="colored-select" Style="@($"--status-color: {TicketStatusHelper.GetColorCode(currentEnum)}; min-width: 190px; margin-top: 0;")">
                         @foreach (TicketStatus status in Enum.GetValues(typeof(TicketStatus)))
                         {
                             <MudSelectItem Value="@status" Style="@($"color: {TicketStatusHelper.GetColorCode(status)}; font-weight: 500;")">
@@ -164,8 +164,9 @@
         <MudTd DataLabel="Cảnh báo SLA">
             @{
                 var curStatus = TicketStatusHelper.ParseFromDbString(ticketDto.StatusId);
+                var totalElapsed = (DateTime.UtcNow.Date - ticketDto.ReceivedDate.Date).Days;
             }
-            @if (curStatus == TicketStatus.Closed)
+            @if (curStatus == TicketStatus.Closed || curStatus == TicketStatus.Completed)
             {
                 <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small">
                     Đã hoàn tất ✔️
@@ -189,9 +190,21 @@
                 else
                 {
                     <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="pulse-red-animation" Style="font-weight: bold; color: white;">
-                        QUÁ HẠN (@elapsedDays/14 ngày)
+                        QUÁ HẠN HÃng (@elapsedDays/14 ngày)
                     </MudChip>
                 }
+            }
+            else if (totalElapsed > 14 && curStatus != TicketStatus.Closed && curStatus != TicketStatus.Completed)
+            {
+                <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="pulse-red-animation" Style="font-weight: bold; color: white;">
+                    QUÁ HẠN (@totalElapsed ngày)
+                </MudChip>
+            }
+            else if (totalElapsed >= 10 && totalElapsed <= 14)
+            {
+                <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small">
+                    Sắp đến hạn (@totalElapsed/14 ngày)
+                </MudChip>
             }
             else 
             {

@@ -123,3 +123,18 @@ code {
 .pulse-red-animation {
     animation: pulse-red 1.5s infinite;
 }
+
+.colored-select .mud-select-input {
+    color: var(--status-color) !important;
+    font-weight: bold !important;
+}
+
+.colored-select .mud-input-root input {
+    color: var(--status-color) !important;
+    font-weight: bold !important;
+}
+
+.colored-select .mud-input-slot {
+    color: var(--status-color) !important;
+    font-weight: bold !important;
+}

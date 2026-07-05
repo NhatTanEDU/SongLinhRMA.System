@@ -253,6 +253,7 @@
     private bool _pendingRefresh = false;
     private string _searchString = "";
     private HubConnection? _hubConnection;
+    private readonly Dictionary<string, DateTime> _deletedOrderIds = new();
 
     private DashboardStats _stats = new();
 
@@ -260,8 +261,9 @@
     {
         await LoadOrders();
 
+        var baseAddress = Http.BaseAddress?.ToString().TrimEnd('/');
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithUrl($"{baseAddress}/salesHub")
             .WithAutomaticReconnect()
             .Build();
 
@@ -269,11 +271,20 @@
         {
             await InvokeAsync(async () =>
             {
+                // Chờ Firestore cập nhật index / lan truyền dữ liệu
+                await Task.Delay(1500);
                 await LoadOrders();
             });
         });
 
-        await _hubConnection.StartAsync();
+        try
+        {
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
     }
 
     private async Task LoadOrders()
@@ -297,7 +308,17 @@
                 MustRevalidate = true
             };
             var response = await Http.SendAsync(request);
-            _orders = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new List<SalesOrderDto>();
+            var allOrders = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new List<SalesOrderDto>();
+
+            // Dọn dẹp các đơn hàng đã bị xóa cục bộ quá 10 giây
+            var now = DateTime.UtcNow;
+            var oldDeleted = _deletedOrderIds.Where(kvp => (now - kvp.Value).TotalSeconds > 10).Select(kvp => kvp.Key).ToList();
+            foreach (var id in oldDeleted)
+            {
+                _deletedOrderIds.Remove(id);
+            }
+
+            _orders = allOrders.Where(o => !_deletedOrderIds.ContainsKey(o.Id)).ToList();
             await ComputeStats();
         }
         catch (Exception ex)
@@ -400,6 +421,14 @@
                 if (response.IsSuccessStatusCode)
                 {
                     Snackbar.Add("Xóa đơn hàng thành công!", Severity.Success);
+                    // ✅ OPTIMISTIC UPDATE: Đưa vào danh sách tombstone và xóa đơn khỏi danh sách hiển thị ngay lập tức
+                    _deletedOrderIds[order.Id] = DateTime.UtcNow;
+                    _orders.Remove(order);
+                    await ComputeStats();
+                    StateHasChanged();
+
+                    // Reload from server after a short delay to sync state
+                    await Task.Delay(1200);
                     await LoadOrders();
                 }
                 else

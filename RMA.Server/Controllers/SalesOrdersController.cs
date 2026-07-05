@@ -91,6 +91,7 @@ namespace RMA.Server.Controllers
         {
             try
             {
+                Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
                 var orders = await _orderRepo.GetAllAsync();
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
@@ -131,6 +132,7 @@ namespace RMA.Server.Controllers
         {
             try
             {
+                Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
                 var orders = await _orderRepo.GetByFieldAsync("Status", "Pending");
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
@@ -237,9 +239,13 @@ namespace RMA.Server.Controllers
             try
             {
                 var order = await _orderRepo.GetByIdAsync(dto.OrderId);
-                if (order == null || (order.Status != "Pending" && order.Status != "Delivering"))
+                if (order == null)
                 {
-                    return BadRequest("Đơn hàng không tồn tại hoặc không ở trạng thái hợp lệ để xác nhận giao hàng (phải là Pending hoặc Delivering).");
+                    return BadRequest("Đơn hàng không tồn tại.");
+                }
+                if (order.Status != "Pending" && order.Status != "Delivering")
+                {
+                    return BadRequest("Đơn hàng đã được xác nhận giao thành công trước đó, vui lòng tải lại trang!");
                 }
 
                 var models = await GetAndFixModelsAsync();

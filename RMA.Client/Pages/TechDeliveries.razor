@@ -99,7 +99,7 @@
     private bool _isLoadingOrders = false;
     private bool _pendingRefresh = false;
     private HubConnection? _hubConnection;
-    private readonly HashSet<string> _confirmedDeliveredIds = new();
+    private readonly Dictionary<string, DateTime> _confirmedDeliveredIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -109,8 +109,9 @@
 
         await LoadOrders();
 
+        var baseAddress = Http.BaseAddress?.ToString().TrimEnd('/');
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithUrl($"{baseAddress}/salesHub")
             .WithAutomaticReconnect()
             .Build();
 
@@ -118,11 +119,20 @@
         {
             await InvokeAsync(async () =>
             {
+                // Chờ Firestore cập nhật index / lan truyền dữ liệu
+                await Task.Delay(1500);
                 await LoadOrders();
             });
         });
 
-        await _hubConnection.StartAsync();
+        try
+        {
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
     }
 
     /// <summary>
@@ -153,14 +163,19 @@
             var response = await Http.SendAsync(request);
             var all = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new List<SalesOrderDto>();
             
-            // Dọn dẹp các đơn hàng đã được server xác nhận là đã giao
-            var confirmedDelivered = all.Where(o => o.Status == "Delivered" && _confirmedDeliveredIds.Contains(o.Id)).Select(o => o.Id).ToList();
+            // Dọn dẹp các đơn hàng đã được server xác nhận là đã giao và đã lưu vết cục bộ quá 10 giây
+            var now = DateTime.UtcNow;
+            var confirmedDelivered = all.Where(o => o.Status == "Delivered" 
+                                                    && _confirmedDeliveredIds.TryGetValue(o.Id, out var addedTime) 
+                                                    && (now - addedTime).TotalSeconds > 10)
+                                        .Select(o => o.Id)
+                                        .ToList();
             foreach (var id in confirmedDelivered)
             {
                 _confirmedDeliveredIds.Remove(id);
             }
 
-            _orders = all.Where(o => (o.Status == "Pending" || o.Status == "Delivering") && !_confirmedDeliveredIds.Contains(o.Id))
+            _orders = all.Where(o => (o.Status == "Pending" || o.Status == "Delivering") && !_confirmedDeliveredIds.ContainsKey(o.Id))
                          .OrderBy(o => o.OrderDate)
                          .ToList();
         }
@@ -214,7 +229,7 @@
         if (result != null && !result.Canceled)
         {
             // ✅ OPTIMISTIC UPDATE: Đưa vào danh sách tombstone và xóa đơn khỏi danh sách hiển thị ngay lập tức
-            _confirmedDeliveredIds.Add(order.Id);
+            _confirmedDeliveredIds[order.Id] = DateTime.UtcNow;
             _orders.RemoveAll(o => o.Id == order.Id);
             await InvokeAsync(StateHasChanged);
 

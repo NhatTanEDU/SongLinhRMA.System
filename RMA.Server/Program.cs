@@ -55,9 +55,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowBlazorWasm",
         policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.SetIsOriginAllowed(origin => true)
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials();
         });
 });
 

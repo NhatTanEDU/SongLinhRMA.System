@@ -90,8 +90,9 @@
     {
         await LoadPendingCount();
 
+        var baseAddress = Http.BaseAddress?.ToString().TrimEnd('/');
         _hubConnection = new HubConnectionBuilder()
-            .WithUrl(NavigationManager.ToAbsoluteUri("/salesHub"))
+            .WithUrl($"{baseAddress}/salesHub")
             .WithAutomaticReconnect()
             .Build();
 
@@ -103,7 +104,14 @@
             });
         });
 
-        await _hubConnection.StartAsync();
+        try
+        {
+            await _hubConnection.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SignalR connection failed: {ex.Message}");
+        }
     }
 
     private async Task LoadPendingCount()

@@ -790,13 +790,32 @@ public class RmaTicketsController : ControllerBase
 
         var activeTickets = tickets.Where(t => activeStatusIds.Contains(t.StatusId)).ToList();
 
+        int greenCount = 0;
+        int yellowCount = 0;
+        int redCount = 0;
+        var utcNow = DateTime.UtcNow;
+
+        foreach (var t in activeTickets)
+        {
+            var (color, isUrgent) = RMA.Server.Services.SlaCalculator.Calculate(
+                t.ReceivedDate,
+                t.SentDate,
+                t.StatusId,
+                utcNow,
+                10, 14); // use defaults for dashboard sync
+
+            if (color == "Red") redCount++;
+            else if (color == "Yellow") yellowCount++;
+            else greenCount++;
+        }
+
         var summary = new DashboardSummaryDto
         {
             TotalOpenTickets = activeTickets.Count,
             UrgentTickets = activeTickets.Count(t => t.IsUrgent),
-            GreenAlertTickets = activeTickets.Count(t => string.IsNullOrEmpty(t.WarningColor) || string.Equals(t.WarningColor, "Green", StringComparison.OrdinalIgnoreCase)),
-            YellowAlertTickets = activeTickets.Count(t => string.Equals(t.WarningColor, "Yellow", StringComparison.OrdinalIgnoreCase)),
-            RedAlertTickets = activeTickets.Count(t => string.Equals(t.WarningColor, "Red", StringComparison.OrdinalIgnoreCase)),
+            GreenAlertTickets = greenCount,
+            YellowAlertTickets = yellowCount,
+            RedAlertTickets = redCount,
             
             TopVendors = activeTickets
                 .GroupBy(t => t.VendorId ?? "internal")

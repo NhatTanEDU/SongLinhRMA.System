@@ -89,9 +89,9 @@
             <MudItem xs="12" md="6">
                 <MudPaper Elevation="3" Class="pa-6 rounded-xl h-100 d-flex flex-column align-center">
                     <MudText Typo="Typo.h6" Class="fw-bold mb-4 align-self-start" Style="color: #2C3E50;">Tình Trạng SLA Bảo Hành (Màu Sắc)</MudText>
-                    @if (_donutSeries.Any() && !_donutSeries[0].Data.All(d => d == 0))
+                    @if (_donutData != null && _donutData.Any(d => d > 0))
                     {
-                        <MudChart @key="_summary" T="double" ChartType="ChartType.Donut" LegendPosition="Position.Right" ChartSeries="@_donutSeries" ChartLabels="@_donutLabels" Width="300px" Height="300px" ChartOptions="@_donutOptions" />
+                        <MudChart @key="_summary" T="double" ChartType="ChartType.Donut" LegendPosition="Position.Right" InputData="@_donutData" InputLabels="@_donutLabels" Width="300px" Height="300px" ChartOptions="@_donutOptions" />
                     }
                     else
                     {
@@ -218,7 +218,7 @@
     private List<AuditLogDto> _recentLogs = new();
 
     // Chart Donut
-    private List<ChartSeries<double>> _donutSeries = new();
+    private double[] _donutData = new double[0];
     private string[] _donutLabels = { "An toàn (Xanh)", "Cận hạn (Vàng)", "Quá hạn (Đỏ)" };
     private ChartOptions _donutOptions = new ChartOptions
     {
@@ -249,18 +249,11 @@
             _summary = await Http.GetFromJsonAsync<DashboardSummaryDto>("api/rmatickets/dashboard-summary");
             if (_summary != null)
             {
-                _donutSeries = new List<ChartSeries<double>>
-                {
-                    new ChartSeries<double>
-                    {
-                        Name = "Tỉ lệ SLA",
-                        Data = new double[] 
-                        { 
-                            _summary.GreenAlertTickets, 
-                            _summary.YellowAlertTickets, 
-                            _summary.RedAlertTickets 
-                        }
-                    }
+                _donutData = new double[] 
+                { 
+                    _summary.GreenAlertTickets, 
+                    _summary.YellowAlertTickets, 
+                    _summary.RedAlertTickets 
                 };
 
                 _barLabels = _summary.TopVendors.Select(v => v.VendorName).ToArray();

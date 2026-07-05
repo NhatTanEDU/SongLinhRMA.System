@@ -88,6 +88,7 @@ builder.Services.AddSingleton(firestoreDb);
 builder.Services.AddScoped<FirestoreRepository<Customer>>(provider => new FirestoreRepository<Customer>(provider.GetRequiredService<FirestoreDb>(), "customers"));
 builder.Services.AddScoped<FirestoreRepository<Device>>(provider => new FirestoreRepository<Device>(provider.GetRequiredService<FirestoreDb>(), "devices"));
 builder.Services.AddScoped<FirestoreRepository<Vendor>>(provider => new FirestoreRepository<Vendor>(provider.GetRequiredService<FirestoreDb>(), "vendors"));
+builder.Services.AddScoped<FirestoreRepository<Brand>>(provider => new FirestoreRepository<Brand>(provider.GetRequiredService<FirestoreDb>(), "brands"));
 builder.Services.AddScoped<FirestoreRepository<Model>>(provider => new FirestoreRepository<Model>(provider.GetRequiredService<FirestoreDb>(), "models"));
 builder.Services.AddScoped<FirestoreRepository<Category>>(provider => new FirestoreRepository<Category>(provider.GetRequiredService<FirestoreDb>(), "categories"));
 builder.Services.AddScoped<FirestoreRepository<StatusMaster>>(provider => new FirestoreRepository<StatusMaster>(provider.GetRequiredService<FirestoreDb>(), "status_masters"));

@@ -20,6 +20,10 @@ namespace RMA.Server.Entities
 
         [MaxLength(100)]
         [FirestoreProperty]
+        public string? BrandId { get; set; }
+
+        [MaxLength(100)]
+        [FirestoreProperty]
         public string? Brand { get; set; }
 
         [Required]

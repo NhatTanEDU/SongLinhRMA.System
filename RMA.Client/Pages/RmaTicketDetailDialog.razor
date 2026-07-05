@@ -8,6 +8,7 @@
 @inject IDialogService DialogService
 @inject IJSRuntime JsRuntime
 @inject AuthenticationStateProvider AuthStateProvider
+@inject HttpClient Http
 
 <MudDialog>
     <TitleContent>
@@ -223,9 +224,14 @@
                             </MudItem>
                             
                             <MudItem xs="6">
-                                @if (isEditing)
+                                @if (isEditing && Ticket.ServiceMode == "External")
                                 {
-                                    <MudTextField @bind-Value="Ticket.VendorName" Label="Đơn vị xử lý" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                                    <MudSelect T="string" Label="Đơn vị xử lý" @bind-Value="Ticket.VendorId" Variant="Variant.Outlined" Margin="Margin.Dense">
+                                        @foreach (var v in _vendors)
+                                        {
+                                            <MudSelectItem Value="@v.Id">@v.Name</MudSelectItem>
+                                        }
+                                    </MudSelect>
                                 }
                                 else
                                 {
@@ -436,6 +442,7 @@
     private bool isSaving = false;
     private List<StatusMasterDto> _statuses = new();
     private CustomerDto? customer;
+    private List<VendorDto> _vendors = new();
 
     private List<DeviceDto> _filteredDevices = new();
     private List<string> _accessories = new() { "Adapter/Sạc", "Dây nguồn", "Pin ngoài", "Chuột", "Bàn phím", "Bao da/Túi", "Bút cảm ứng" };
@@ -457,6 +464,7 @@
         _isSales = user.IsInRole("Sales");
 
         _statuses = await TicketService.GetStatusesAsync();
+        _vendors = await Http.GetFromJsonAsync<List<VendorDto>>("api/vendors") ?? new();
         
         try
         {

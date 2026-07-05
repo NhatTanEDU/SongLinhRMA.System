@@ -80,7 +80,7 @@
             <MudItem xs="12" md="6">
                 <MudPaper Elevation="3" Class="pa-6 rounded-lg h-100 d-flex flex-column align-center">
                     <MudText Typo="Typo.h6" Class="fw-bold mb-4 align-self-start" Style="color: #0072BC;">Tỉ lệ Cảnh báo SLA 14 Ngày</MudText>
-                    @if (!_donutSeries.Any() || _donutSeries[0].Data.All(d => d == 0))
+                    @if (_donutData == null || !_donutData.Any(d => d > 0))
                     {
                         <div class="d-flex align-center justify-center flex-grow-1" style="height: 320px;">
                             <MudText Typo="Typo.body1" Class="text-secondary italic">Không có dữ liệu cảnh báo SLA</MudText>
@@ -89,7 +89,7 @@
                     else
                     {
                         <!-- Fixed width/height + @key ensures correct dynamic SVG render -->
-                        <MudChart @key="_summary" T="double" ChartType="ChartType.Donut" LegendPosition="Position.Right" ChartSeries="@_donutSeries" ChartLabels="@_donutLabels" Width="320px" Height="320px" ChartOptions="@_donutOptions" />
+                        <MudChart @key="_summary" T="double" ChartType="ChartType.Donut" LegendPosition="Position.Right" InputData="@_donutData" InputLabels="@_donutLabels" Width="320px" Height="320px" ChartOptions="@_donutOptions" />
                     }
                 </MudPaper>
             </MudItem>
@@ -144,7 +144,7 @@
     private DashboardSummaryDto? _summary;
     
     // Donut chart variables
-    private List<ChartSeries<double>> _donutSeries = new();
+    private double[] _donutData = new double[0];
     private string[] _donutLabels = { "An toàn (Dưới 10 ngày)", "Sắp quá hạn (10-14 ngày)", "Quá hạn (Trên 14 ngày)" };
     private ChartOptions _donutOptions = new ChartOptions
     {
@@ -166,18 +166,11 @@
             _summary = await TicketService.GetDashboardSummaryAsync();
             if (_summary != null)
             {
-                _donutSeries = new List<ChartSeries<double>>
-                {
-                    new ChartSeries<double>
-                    {
-                        Name = "Tỷ lệ SLA",
-                        Data = new double[] 
-                        { 
-                            _summary.GreenAlertTickets, 
-                            _summary.YellowAlertTickets, 
-                            _summary.RedAlertTickets 
-                        }
-                    }
+                _donutData = new double[] 
+                { 
+                    _summary.GreenAlertTickets, 
+                    _summary.YellowAlertTickets, 
+                    _summary.RedAlertTickets 
                 };
 
                 _barLabels = _summary.TopVendors.Select(v => v.VendorName).ToArray();

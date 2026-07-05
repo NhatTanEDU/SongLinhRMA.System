@@ -16,12 +16,12 @@ public class ReferenceDataService
 
     public async Task<List<VendorDto>> GetVendorsAsync()
     {
-        return await _http.GetFromJsonAsync<List<VendorDto>>("api/referencedata/vendors") ?? new List<VendorDto>();
+        return await _http.GetFromJsonAsync<List<VendorDto>>("api/vendors") ?? new List<VendorDto>();
     }
 
     public async Task<VendorDto?> CreateVendorAsync(VendorDto vendor)
     {
-        var response = await _http.PostAsJsonAsync("api/referencedata/vendors", vendor);
+        var response = await _http.PostAsJsonAsync("api/vendors", vendor);
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<VendorDto>();
@@ -31,19 +31,19 @@ public class ReferenceDataService
 
     public async Task<bool> UpdateVendorAsync(string id, VendorDto vendor)
     {
-        var response = await _http.PutAsJsonAsync($"api/referencedata/vendors/{id}", vendor);
+        var response = await _http.PutAsJsonAsync($"api/vendors/{id}", vendor);
         return response.IsSuccessStatusCode;
     }
 
     public async Task<bool> DeleteVendorAsync(string id)
     {
-        var response = await _http.DeleteAsync($"api/referencedata/vendors/{id}");
+        var response = await _http.DeleteAsync($"api/vendors/{id}");
         return response.IsSuccessStatusCode;
     }
 
     public async Task<List<ModelDto>> GetModelsAsync()
     {
-        return await _http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new List<ModelDto>();
+        return await _http.GetFromJsonAsync<List<ModelDto>>("api/models") ?? new List<ModelDto>();
     }
 
     public async Task<List<CategoryDto>> GetCategoriesAsync()
@@ -53,7 +53,7 @@ public class ReferenceDataService
 
     public async Task<ModelDto?> CreateModelAsync(ModelDto model)
     {
-        var response = await _http.PostAsJsonAsync("api/referencedata/models", model);
+        var response = await _http.PostAsJsonAsync("api/models", model);
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<ModelDto>();
@@ -67,6 +67,21 @@ public class ReferenceDataService
         if (response.IsSuccessStatusCode)
         {
             return await response.Content.ReadFromJsonAsync<CategoryDto>();
+        }
+        return null;
+    }
+
+    public async Task<List<BrandDto>> GetBrandsAsync()
+    {
+        return await _http.GetFromJsonAsync<List<BrandDto>>("api/brands") ?? new List<BrandDto>();
+    }
+
+    public async Task<BrandDto?> CreateBrandAsync(BrandDto brand)
+    {
+        var response = await _http.PostAsJsonAsync("api/brands", brand);
+        if (response.IsSuccessStatusCode)
+        {
+            return await response.Content.ReadFromJsonAsync<BrandDto>();
         }
         return null;
     }

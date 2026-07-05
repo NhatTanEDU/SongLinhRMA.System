@@ -282,10 +282,24 @@
                                                Required="true" RequiredError="Vui lòng chọn chế độ xử lý!"
                                                Variant="Variant.Outlined">
                                         <MudSelectItem Value="@("Internal")">Sửa chữa nội bộ (Internal)</MudSelectItem>
-                                        <MudSelectItem Value="@("External")">Gửi hãng bảo hành (External)</MudSelectItem>
+                                        <MudSelectItem Value="@("External")">Gửi hãng / Đối tác ngoài (External)</MudSelectItem>
                                         <MudSelectItem Value="@("Onsite")">Xử lý tại chỗ/Hiện trường (Onsite)</MudSelectItem>
                                     </MudSelect>
                                 </MudItem>
+
+                                @if (Ticket.ServiceMode == "External")
+                                {
+                                    <MudItem xs="12">
+                                        <MudSelect T="string" Label="Đơn vị cung cấp / TTBH gửi đến *" @bind-Value="Ticket.VendorId"
+                                                   Required="true" RequiredError="Vui lòng chọn Đơn vị nhận bảo hành!"
+                                                   Variant="Variant.Outlined">
+                                            @foreach (var vendor in _vendors)
+                                            {
+                                                <MudSelectItem Value="@vendor.Id">@vendor.Name</MudSelectItem>
+                                            }
+                                        </MudSelect>
+                                    </MudItem>
+                                }
 
                                 <!-- Mô tả lỗi -->
                                 <MudItem xs="12">
@@ -431,10 +445,10 @@
     bool _valid;
     private MudTextField<string> _snInputRef = null!;
 
-    // Data lists
     List<CustomerDto> _customers = new();
     List<StatusMasterDto> _statuses = new();
     List<ModelDto> _models = new();
+    List<VendorDto> _vendors = new();
 
     // S/N State
     private string _searchSerialNumber = string.Empty;
@@ -474,11 +488,13 @@
         var custTask = CustomerService.GetCustomersAsync();
         var staTask  = TicketService.GetStatusesAsync();
         var modTask  = ReferenceService.GetModelsAsync();
-        await Task.WhenAll(custTask, staTask, modTask);
+        var vendTask = Http.GetFromJsonAsync<List<VendorDto>>("api/vendors");
+        await Task.WhenAll(custTask, staTask, modTask, vendTask);
 
         _customers  = custTask.Result;
         _statuses   = staTask.Result;
         _models     = modTask.Result;
+        _vendors    = vendTask.Result ?? new();
 
         // Nếu là mode chỉnh sửa (Edit)
         if (!string.IsNullOrEmpty(Ticket.Id))

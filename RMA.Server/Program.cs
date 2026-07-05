@@ -112,6 +112,10 @@ builder.Services.AddScoped<IOcrService, BarcodeAndOcrService>();
 // PDF Service
 builder.Services.AddScoped<IPdfService, RmaReceiptPdfService>();
 
+// Firebase Metrics & Cost Dashboard Services
+builder.Services.AddSingleton<MetricsCollectorService>();
+builder.Services.AddHostedService<MetricsFlushBackgroundService>();
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -124,6 +128,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseCors("AllowBlazorWasm");
+
+app.UseMiddleware<RMA.Server.Middlewares.ApiMetricsMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

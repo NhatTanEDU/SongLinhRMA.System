@@ -20,6 +20,9 @@ namespace RMA.Server.Services
         {
             var collection = _firestoreDb.Collection(_collectionName);
             var snapshot = await collection.GetSnapshotAsync();
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Read", Math.Max(1, snapshot.Count));
+
             var result = new List<T>();
             foreach (var document in snapshot.Documents)
             {
@@ -35,6 +38,9 @@ namespace RMA.Server.Services
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             var snapshot = await document.GetSnapshotAsync();
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Read", 1);
+
             if (snapshot.Exists)
             {
                 return snapshot.ConvertTo<T>();
@@ -47,6 +53,9 @@ namespace RMA.Server.Services
             var collection = _firestoreDb.Collection(_collectionName);
             var query = collection.WhereEqualTo(fieldName, value);
             var snapshot = await query.GetSnapshotAsync();
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Read", Math.Max(1, snapshot.Count));
+
             var result = new List<T>();
             foreach (var document in snapshot.Documents)
             {
@@ -63,6 +72,9 @@ namespace RMA.Server.Services
             var collection = _firestoreDb.Collection(_collectionName);
             var query = collection.Offset(offset).Limit(limit);
             var snapshot = await query.GetSnapshotAsync();
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Read", Math.Max(1, snapshot.Count));
+
             var result = new List<T>();
             foreach (var document in snapshot.Documents)
             {
@@ -78,6 +90,9 @@ namespace RMA.Server.Services
         {
             var collection = _firestoreDb.Collection(_collectionName);
             var docRef = await collection.AddAsync(entity);
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Write", 1);
+
             return docRef.Id;
         }
 
@@ -85,12 +100,16 @@ namespace RMA.Server.Services
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             await document.SetAsync(entity, SetOptions.Overwrite);
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Write", 1);
         }
 
         public virtual async Task DeleteAsync(string id)
         {
             var document = _firestoreDb.Collection(_collectionName).Document(id);
             await document.DeleteAsync();
+            
+            MetricsCollectorService.Instance?.IncrementFirestoreOp(_collectionName, "Delete", 1);
         }
     }
 }

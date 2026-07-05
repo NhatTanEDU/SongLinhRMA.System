@@ -107,6 +107,9 @@ namespace RMA.Server.Controllers
                     DeliveryDate = o.DeliveryDate,
                     Status = o.Status,
                     SalesNote = o.SalesNote,
+                    Note = o.Note,
+                    LastUpdated = o.LastUpdated,
+                    UpdatedBy = o.UpdatedBy,
                     Details = o.Details.Select(d => new OrderDetailDto
                     {
                         ModelId = d.ModelId,
@@ -148,6 +151,9 @@ namespace RMA.Server.Controllers
                     DeliveryDate = o.DeliveryDate,
                     Status = o.Status,
                     SalesNote = o.SalesNote,
+                    Note = o.Note,
+                    LastUpdated = o.LastUpdated,
+                    UpdatedBy = o.UpdatedBy,
                     Details = o.Details.Select(d => new OrderDetailDto
                     {
                         ModelId = d.ModelId,
@@ -200,6 +206,31 @@ namespace RMA.Server.Controllers
                 await _orderRepo.UpdateAsync(id, order);
                 await _hubContext.Clients.All.SendAsync("OrderStateChanged");
                 return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpPut("{id}/business-info")]
+        public async Task<IActionResult> UpdateBusinessInfo(string id, [FromBody] SalesOrderBusinessInfoDto dto)
+        {
+            if (dto == null) return BadRequest("Yêu cầu không hợp lệ.");
+
+            try
+            {
+                var order = await _orderRepo.GetByIdAsync(id);
+                if (order == null) return NotFound("Order not found");
+
+                order.OrderCode = dto.OrderCode;
+                order.Note = dto.Note;
+                order.LastUpdated = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+                order.UpdatedBy = User.Identity?.Name ?? "Unknown";
+
+                await _orderRepo.UpdateAsync(id, order);
+                await _hubContext.Clients.All.SendAsync("OrderStateChanged");
+                return Ok();
             }
             catch (Exception ex)
             {

@@ -307,4 +307,150 @@ public class DevicesController : ControllerBase
 
         return Ok(lifecycleDto);
     }
+
+    [HttpGet("{serialNumber}/summary")]
+    public async Task<ActionResult<DeviceSummaryDto>> GetSummary(string serialNumber)
+    {
+        if (string.IsNullOrWhiteSpace(serialNumber))
+        {
+            return BadRequest("Số S/N không hợp lệ.");
+        }
+
+        var upperSn = serialNumber.ToUpper();
+        Device? device = await _deviceRepo.GetByIdAsync(upperSn);
+        if (device == null)
+        {
+            var list = await _deviceRepo.GetByFieldAsync("SerialNumber", serialNumber);
+            if (!list.Any())
+            {
+                list = await _deviceRepo.GetByFieldAsync("SerialNumber", upperSn);
+            }
+            device = list.FirstOrDefault();
+        }
+
+        if (device == null)
+        {
+            return NotFound($"Không tìm thấy thiết bị có S/N: {serialNumber}");
+        }
+
+        var modelTask = _modelRepo.GetByIdAsync(device.ModelId);
+        var customerTask = _customerRepo.GetByIdAsync(device.CustomerId);
+        
+        Task<SalesOrder?> orderTask = !string.IsNullOrEmpty(device.OrderId)
+            ? _orderRepo.GetByIdAsync(device.OrderId)
+            : Task.FromResult<SalesOrder?>(null);
+
+        Task<List<RmaTicket>> ticketsTask = _ticketRepo.GetByFieldAsync("DeviceId", device.Id);
+
+        await Task.WhenAll(modelTask, customerTask, orderTask, ticketsTask);
+
+        var model = modelTask.Result;
+        var customer = customerTask.Result;
+        var order = orderTask.Result;
+        var tickets = ticketsTask.Result;
+
+        RmaTicket? activeTicket = null;
+        if (tickets.Any())
+        {
+            activeTicket = tickets.FirstOrDefault(t => 
+                TicketStatusHelper.ParseFromDbString(t.StatusId) != TicketStatus.Completed && 
+                TicketStatusHelper.ParseFromDbString(t.StatusId) != TicketStatus.Closed);
+        }
+
+        var latestTicket = tickets.OrderByDescending(t => t.ReceivedDate).FirstOrDefault();
+        string currentLocationName = "Nội bộ";
+        TicketStatus currentStatus = TicketStatus.New;
+        OpenTicketSummaryDto? activeTicketDto = null;
+
+        var locations = await _locationRepo.GetAllAsync();
+        var locationMap = locations.ToDictionary(l => l.Id, l => l.Name);
+
+        if (latestTicket != null)
+        {
+            currentStatus = TicketStatusHelper.ParseFromDbString(latestTicket.StatusId);
+
+            var historySnapshot = await _firestoreDb.Collection("status_histories")
+                .WhereEqualTo("RmaTicketId", latestTicket.Id)
+                .GetSnapshotAsync();
+            
+            var history = historySnapshot.Documents
+                .Where(d => d.Exists)
+                .Select(d => d.ConvertTo<StatusHistory>())
+                .OrderByDescending(h => h.UpdateTime)
+                .FirstOrDefault();
+
+            if (history != null)
+            {
+                if (history.LocationId != null && locationMap.TryGetValue(history.LocationId, out var locName))
+                {
+                    currentLocationName = locName;
+                }
+            }
+        }
+
+        if (activeTicket != null)
+        {
+            activeTicketDto = new OpenTicketSummaryDto
+            {
+                TicketId = activeTicket.Id,
+                TicketCode = activeTicket.Id,
+                Status = TicketStatusHelper.ParseFromDbString(activeTicket.StatusId),
+                SentDate = activeTicket.SentDate,
+                ReceivedDate = activeTicket.ReceivedDate
+            };
+
+            if (activeTicket.Id == latestTicket?.Id && currentLocationName != "Nội bộ")
+            {
+                activeTicketDto.LocationName = currentLocationName;
+            }
+            else
+            {
+                var actHistSnapshot = await _firestoreDb.Collection("status_histories")
+                    .WhereEqualTo("RmaTicketId", activeTicket.Id)
+                    .GetSnapshotAsync();
+                
+                var actHistory = actHistSnapshot.Documents
+                    .Where(d => d.Exists)
+                    .Select(d => d.ConvertTo<StatusHistory>())
+                    .OrderByDescending(h => h.UpdateTime)
+                    .FirstOrDefault();
+
+                if (actHistory != null)
+                {
+                    if (actHistory.LocationId != null && locationMap.TryGetValue(actHistory.LocationId, out var locName))
+                    {
+                        activeTicketDto.LocationName = locName;
+                    }
+                    else
+                    {
+                        activeTicketDto.LocationName = "Nội bộ";
+                    }
+                }
+                else
+                {
+                    activeTicketDto.LocationName = "Nội bộ";
+                }
+            }
+        }
+
+        var summaryDto = new DeviceSummaryDto
+        {
+            DeviceId = device.Id,
+            SerialNumber = device.SerialNumber,
+            ModelName = model?.ModelName ?? string.Empty,
+            Brand = model?.Brand ?? string.Empty,
+            PurchaseDate = device.PurchaseDate,
+            WarrantyExpiry = device.WarrantyExpiry,
+            CustomerId = device.CustomerId,
+            CustomerName = customer?.Name ?? string.Empty,
+            OrderId = device.OrderId,
+            OrderCode = order?.OrderCode,
+            DeliveryDate = order?.DeliveryDate,
+            CurrentLocationName = currentLocationName,
+            CurrentStatus = currentStatus,
+            ActiveTicket = activeTicketDto
+        };
+
+        return Ok(summaryDto);
+    }
 }

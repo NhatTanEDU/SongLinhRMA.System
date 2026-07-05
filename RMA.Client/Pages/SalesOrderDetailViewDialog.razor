@@ -5,25 +5,16 @@
 <MudDialog>
     <DialogContent>
         <MudGrid>
-            <!-- Info Cards -->
+            <!-- PHÂN KHU 1: THÔNG TIN HỆ THỐNG (READONLY) -->
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold" Color="Color.Primary">THÔNG TIN HỆ THỐNG (KHÔNG THỂ SỬA)</MudText>
+                <MudDivider Class="my-2" />
+            </MudItem>
+
             <MudItem xs="12" sm="6">
                 <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Khách Hàng</MudText>
                 <MudText Typo="Typo.body1" Class="fw-bold">@Order.CustomerName</MudText>
             </MudItem>
-            <MudItem xs="12" sm="6">
-                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Mã Đơn Hàng</MudText>
-                <MudText Typo="Typo.body1" Class="fw-bold" Style="color: #0072BC;">@Order.OrderCode</MudText>
-            </MudItem>
-
-            <MudItem xs="12" sm="6">
-                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ngày Tạo</MudText>
-                <MudText Typo="Typo.body1">@Order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
-            </MudItem>
-            <MudItem xs="12" sm="6">
-                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ngày Giao Hàng</MudText>
-                <MudText Typo="Typo.body1">@(Order.DeliveryDate.HasValue ? Order.DeliveryDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Chưa giao hàng")</MudText>
-            </MudItem>
-
             <MudItem xs="12" sm="6">
                 <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Trạng Thái</MudText>
                 @if (Order.Status == "Pending")
@@ -35,14 +26,24 @@
                     <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">Đã Giao</MudChip>
                 }
             </MudItem>
+
             <MudItem xs="12" sm="6">
-                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ghi Chú Đơn Hàng</MudText>
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ngày Tạo</MudText>
+                <MudText Typo="Typo.body1">@Order.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</MudText>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ngày Giao Hàng</MudText>
+                <MudText Typo="Typo.body1">@(Order.DeliveryDate.HasValue ? Order.DeliveryDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "Chưa giao hàng")</MudText>
+            </MudItem>
+
+            <MudItem xs="12">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Ghi chú gốc (Sale)</MudText>
                 <MudText Typo="Typo.body1" Style="font-style: italic;">@(string.IsNullOrWhiteSpace(Order.SalesNote) ? "Không có" : Order.SalesNote)</MudText>
             </MudItem>
 
             <!-- Order Items Detail Table -->
-            <MudItem xs="12" Class="mt-4">
-                <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC; margin-bottom: 8px;">Danh Sách Sản Phẩm</MudText>
+            <MudItem xs="12" Class="mt-2">
+                <MudText Typo="Typo.subtitle2" Class="fw-bold" Style="color: #0072BC; margin-bottom: 8px;">Danh Sách Sản Phẩm</MudText>
                 <MudTable Items="@Order.Details" Dense="true" Outlined="true" Elevation="1" Class="rounded-lg">
                     <HeaderContent>
                         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thiết bị (Model)</MudText></MudTh>
@@ -62,8 +63,8 @@
             <!-- Serials List (if Delivered) -->
             @if (Order.Status == "Delivered")
             {
-                <MudItem xs="12" Class="mt-4">
-                    <MudText Typo="Typo.h6" Class="fw-bold text-success" Style="margin-bottom: 8px;">Danh Sách Số Serial Đã Kích Hoạt</MudText>
+                <MudItem xs="12" Class="mt-2">
+                    <MudText Typo="Typo.subtitle2" Class="fw-bold text-success" Style="margin-bottom: 8px;">Danh Sách Số Serial Đã Kích Hoạt</MudText>
                     @if (_loadingSerials)
                     {
                         <div class="d-flex align-center gap-3">
@@ -81,7 +82,7 @@
                             @foreach (var device in _devices)
                             {
                                 <MudItem xs="12" sm="4" md="3">
-                                    <MudPaper Class="pa-3 rounded-lg d-flex align-center gap-2 border-solid" Style="border: 1px solid #e0e0e0; background-color: #fafafa;">
+                                    <MudPaper Class="pa-2 rounded-lg d-flex align-center gap-2 border-solid" Style="border: 1px solid #e0e0e0; background-color: #fafafa;">
                                         <MudIcon Icon="@Icons.Material.Filled.QrCode" Color="Color.Success" Size="Size.Small" />
                                         <div>
                                             <MudText Typo="Typo.caption" Class="text-secondary">@device.ModelName</MudText>
@@ -94,10 +95,53 @@
                     }
                 </MudItem>
             }
+
+            <!-- PHÂN KHU 2: THÔNG TIN NGHIỆP VỤ (CHO PHÉP SỬA) -->
+            <MudItem xs="12" Class="mt-4">
+                <MudText Typo="Typo.subtitle1" Class="fw-bold" Color="Color.Primary">THÔNG TIN NGHIỆP VỤ</MudText>
+                <MudDivider Class="my-2" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <div class="d-flex align-center gap-2 mb-1">
+                    <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold">Mã Đơn Hàng (OrderCode)</MudText>
+                    @if (string.IsNullOrWhiteSpace(_orderCodeInput))
+                    {
+                        <MudChip T="string" Color="Color.Default" Size="Size.Small" Variant="Variant.Filled" Style="background-color: #eeeeee; color: #757575;">📎 Chưa có</MudChip>
+                    }
+                    else
+                    {
+                        <MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Filled">✓ Đã cập nhật thủ công</MudChip>
+                    }
+                </div>
+                <MudTextField T="string" @bind-Value="_orderCodeInput" Variant="Variant.Outlined" Margin="Margin.Dense" Immediate="true" />
+            </MudItem>
+
+            <MudItem xs="12" sm="6">
+                <MudText Typo="Typo.subtitle2" Class="text-secondary fw-bold" Style="margin-bottom: 4px;">Ghi Chú Nghiệp Vụ (Note)</MudText>
+                <MudTextField T="string" @bind-Value="_noteInput" Variant="Variant.Outlined" Margin="Margin.Dense" Lines="2" Immediate="true" />
+            </MudItem>
+
+            @if (Order.LastUpdated.HasValue)
+            {
+                <MudItem xs="12" Class="mt-2">
+                    <MudText Typo="Typo.caption" Class="text-secondary" Style="font-style: italic;">
+                        Lần cập nhật cuối: @Order.LastUpdated.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") bởi @Order.UpdatedBy
+                    </MudText>
+                </MudItem>
+            }
         </MudGrid>
     </DialogContent>
     <DialogActions>
-        <MudButton Color="Color.Primary" OnClick="Close" Variant="Variant.Filled" Class="rounded-lg">Đóng</MudButton>
+        @if (_isDirty)
+        {
+            <MudButton Color="Color.Default" OnClick="ResetChanges" Variant="Variant.Outlined" Class="rounded-lg mr-2">Hủy</MudButton>
+            <MudButton Color="Color.Success" OnClick="SaveChanges" Variant="Variant.Filled" Class="rounded-lg">Lưu thay đổi</MudButton>
+        }
+        else
+        {
+            <MudButton Color="Color.Primary" OnClick="Close" Variant="Variant.Filled" Class="rounded-lg">Đóng</MudButton>
+        }
     </DialogActions>
 </MudDialog>
 
@@ -108,8 +152,17 @@
     private List<DeviceDto> _devices = new();
     private bool _loadingSerials = true;
 
+    private string _orderCodeInput = string.Empty;
+    private string _noteInput = string.Empty;
+
+    private bool _isDirty => (_orderCodeInput ?? string.Empty) != (Order.OrderCode ?? string.Empty) || 
+                             (_noteInput ?? string.Empty) != (Order.Note ?? string.Empty);
+
     protected override async Task OnInitializedAsync()
     {
+        _orderCodeInput = Order.OrderCode ?? string.Empty;
+        _noteInput = Order.Note ?? string.Empty;
+
         if (Order.Status == "Delivered")
         {
             _loadingSerials = true;
@@ -125,6 +178,44 @@
             {
                 _loadingSerials = false;
             }
+        }
+    }
+
+    private void ResetChanges()
+    {
+        _orderCodeInput = Order.OrderCode ?? string.Empty;
+        _noteInput = Order.Note ?? string.Empty;
+    }
+
+    private async Task SaveChanges()
+    {
+        try
+        {
+            var payload = new SalesOrderBusinessInfoDto
+            {
+                OrderCode = _orderCodeInput,
+                Note = _noteInput
+            };
+            var response = await Http.PutAsJsonAsync($"api/salesorders/{Order.Id}/business-info", payload);
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Cập nhật thông tin nghiệp vụ thành công!", Severity.Success);
+                Order.OrderCode = _orderCodeInput;
+                Order.Note = _noteInput;
+                Order.LastUpdated = DateTime.UtcNow;
+                
+                // Let's reload order updates or close with success status
+                MudDialog.Close(DialogResult.Ok(true));
+            }
+            else
+            {
+                var errMsg = await response.Content.ReadAsStringAsync();
+                Snackbar.Add($"Lỗi khi lưu: {errMsg}", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
         }
     }
 

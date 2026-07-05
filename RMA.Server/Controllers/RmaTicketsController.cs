@@ -444,6 +444,13 @@ public class RmaTicketsController : ControllerBase
     [Authorize(Roles = "Admin,Tech")]
     public async Task<ActionResult<RmaTicketDto>> Post([FromBody] RmaTicketCreateDto dto)
     {
+        if (string.IsNullOrEmpty(dto.StatusId))
+        {
+            var statuses = await _statusRepo.GetAllAsync();
+            var newStatus = statuses.FirstOrDefault(s => s.StatusName.ToLower().Contains("new") || s.StatusName.ToLower().Contains("mới"));
+            dto.StatusId = newStatus?.Id ?? statuses.FirstOrDefault()?.Id ?? string.Empty;
+        }
+
         var entity = new RmaTicket
         {
             DeviceId = dto.DeviceId,

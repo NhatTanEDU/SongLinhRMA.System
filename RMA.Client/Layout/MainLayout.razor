@@ -1,6 +1,7 @@
 @inherits LayoutComponentBase
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
+@inject IDialogService DialogService
 
 <MudThemeProvider Theme="@_solicomTheme" />
 <MudDialogProvider />
@@ -13,6 +14,8 @@
         <MudText Typo="Typo.h5" Class="ml-3 fw-bold">SOLICOM RMA</MudText>
         <MudSpacer />
         
+        <MudIconButton Icon="@Icons.Material.Filled.Search" Color="Color.Inherit" OnClick="OpenGlobalSearchDialog" Class="mr-2" title="Tra cứu vòng đời thiết bị" />
+
         <AuthorizeView>
             <Authorized>
                 <MudText Typo="Typo.body1" Class="mr-4">Xin chào, @context.User.Identity?.Name!</MudText>
@@ -69,5 +72,11 @@
             mockProvider.MarkUserAsLoggedOut();
             NavigationManager.NavigateTo("/login");
         }
+    }
+
+    private async Task OpenGlobalSearchDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<Pages.GlobalSearchDialog>("Tra cứu Vòng đời bảo hành thiết bị", options);
     }
 }

@@ -1,10 +1,14 @@
+using System;
 using Microsoft.AspNetCore.Mvc;
 using RMA.Server.Entities;
 using RMA.Server.Services;
 using RMA.Shared.DTOs;
+using RMA.Shared.Enums;
+using RMA.Shared.Helpers;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Google.Cloud.Firestore;
 
 using Microsoft.AspNetCore.Authorization;
 
@@ -18,15 +22,30 @@ public class DevicesController : ControllerBase
     private readonly FirestoreRepository<Device> _deviceRepo;
     private readonly FirestoreRepository<Customer> _customerRepo;
     private readonly FirestoreRepository<Model> _modelRepo;
+    private readonly FirestoreRepository<SalesOrder> _orderRepo;
+    private readonly FirestoreRepository<RmaTicket> _ticketRepo;
+    private readonly FirestoreRepository<StatusMaster> _statusMasterRepo;
+    private readonly FirestoreRepository<Location> _locationRepo;
+    private readonly FirestoreDb _firestoreDb;
 
     public DevicesController(
         FirestoreRepository<Device> deviceRepo,
         FirestoreRepository<Customer> customerRepo,
-        FirestoreRepository<Model> modelRepo)
+        FirestoreRepository<Model> modelRepo,
+        FirestoreRepository<SalesOrder> orderRepo,
+        FirestoreRepository<RmaTicket> ticketRepo,
+        FirestoreRepository<StatusMaster> statusMasterRepo,
+        FirestoreRepository<Location> locationRepo,
+        FirestoreDb firestoreDb)
     {
         _deviceRepo = deviceRepo;
         _customerRepo = customerRepo;
         _modelRepo = modelRepo;
+        _orderRepo = orderRepo;
+        _ticketRepo = ticketRepo;
+        _statusMasterRepo = statusMasterRepo;
+        _locationRepo = locationRepo;
+        _firestoreDb = firestoreDb;
     }
 
     [HttpGet]
@@ -144,5 +163,147 @@ public class DevicesController : ControllerBase
     {
         await _deviceRepo.DeleteAsync(id);
         return NoContent();
+    }
+
+    [HttpGet("{serialNumber}/lifecycle")]
+    public async Task<ActionResult<DeviceLifecycleDto>> GetLifecycle(string serialNumber)
+    {
+        if (string.IsNullOrWhiteSpace(serialNumber))
+        {
+            return BadRequest("Số S/N không hợp lệ.");
+        }
+
+        // 1. Tìm Device theo S/N
+        var upperSn = serialNumber.ToUpper();
+        Device? device = await _deviceRepo.GetByIdAsync(upperSn);
+        if (device == null)
+        {
+            // Fallback query by SerialNumber field
+            var list = await _deviceRepo.GetByFieldAsync("SerialNumber", serialNumber);
+            if (!list.Any())
+            {
+                // Try upper case fallback too
+                list = await _deviceRepo.GetByFieldAsync("SerialNumber", upperSn);
+            }
+            device = list.FirstOrDefault();
+        }
+
+        if (device == null)
+        {
+            return NotFound($"Không tìm thấy thiết bị có S/N: {serialNumber}");
+        }
+
+        // 2. Query parallelly (Task.WhenAll): Model, Customer, SalesOrder, RmaTickets
+        var modelTask = _modelRepo.GetByIdAsync(device.ModelId);
+        var customerTask = _customerRepo.GetByIdAsync(device.CustomerId);
+        
+        Task<SalesOrder?> orderTask = !string.IsNullOrEmpty(device.OrderId)
+            ? _orderRepo.GetByIdAsync(device.OrderId)
+            : Task.FromResult<SalesOrder?>(null);
+
+        Task<List<RmaTicket>> ticketsTask = _ticketRepo.GetByFieldAsync("DeviceId", device.Id);
+
+        await Task.WhenAll(modelTask, customerTask, orderTask, ticketsTask);
+
+        var model = modelTask.Result;
+        var customer = customerTask.Result;
+        var order = orderTask.Result;
+        var tickets = ticketsTask.Result;
+
+        // 3. Lấy tất cả status histories của các tickets thu được
+        var rmaHistory = new List<RmaTicketLifecycleDto>();
+        if (tickets.Any())
+        {
+            // Lấy tất cả Locations để map tên (loại bỏ StatusMaster)
+            var locationsTask = _locationRepo.GetAllAsync();
+            await locationsTask;
+            var locationMap = locationsTask.Result.ToDictionary(l => l.Id, l => l);
+
+            // Fetch status histories for all tickets in parallel or single query using FirestoreDb directly (WhereIn)
+            var ticketIds = tickets.Select(t => t.Id).ToList();
+            var histories = new List<StatusHistory>();
+
+            // Firestore WhereIn supports up to 30 items
+            const int batchSize = 30;
+            for (int i = 0; i < ticketIds.Count; i += batchSize)
+            {
+                var batchIds = ticketIds.Skip(i).Take(batchSize).ToList();
+                var querySnapshot = await _firestoreDb.Collection("status_histories")
+                    .WhereIn("RmaTicketId", batchIds)
+                    .GetSnapshotAsync();
+                
+                foreach (var doc in querySnapshot.Documents)
+                {
+                    if (doc.Exists)
+                    {
+                        histories.Add(doc.ConvertTo<StatusHistory>());
+                    }
+                }
+            }
+
+            // Map and group histories by ticket
+            var historiesByTicket = histories
+                .GroupBy(h => h.RmaTicketId)
+                .ToDictionary(g => g.Key, g => g.OrderBy(h => h.UpdateTime).ToList());
+
+            foreach (var t in tickets)
+            {
+                var ticketDto = new RmaTicketLifecycleDto
+                {
+                    TicketId = t.Id,
+                    ProblemDescription = t.ProblemDescription,
+                    ServiceMode = t.ServiceMode,
+                    ReceivedDate = t.ReceivedDate,
+                    Status = TicketStatusHelper.ParseFromDbString(t.StatusId)
+                };
+
+                if (historiesByTicket.TryGetValue(t.Id, out var ticketHistories))
+                {
+                    ticketDto.Steps = ticketHistories.Select(h => new RmaStepDto
+                    {
+                        Status = TicketStatusHelper.ParseFromDbString(h.StatusId),
+                        LocationName = (h.LocationId != null && locationMap.ContainsKey(h.LocationId)) ? locationMap[h.LocationId].Name : "Nội bộ",
+                        Note = h.Note,
+                        ChangedAt = h.UpdateTime
+                    }).ToList();
+
+                    var latestStep = ticketDto.Steps.OrderByDescending(s => s.ChangedAt).FirstOrDefault();
+                    ticketDto.CurrentLocationName = latestStep?.LocationName ?? "Nội bộ";
+                }
+                else
+                {
+                    ticketDto.CurrentLocationName = "Nội bộ";
+                }
+
+                rmaHistory.Add(ticketDto);
+            }
+        }
+
+        // Sort RMA history by received date descending
+        rmaHistory = rmaHistory.OrderByDescending(h => h.ReceivedDate).ToList();
+
+        var deviceDto = new DeviceDto
+        {
+            Id = device.Id,
+            SerialNumber = device.SerialNumber,
+            CustomerId = device.CustomerId,
+            CustomerName = customer?.Name ?? string.Empty,
+            ModelId = device.ModelId,
+            ModelName = model?.ModelName ?? string.Empty,
+            Brand = model?.Brand ?? string.Empty,
+            PurchaseDate = device.PurchaseDate,
+            WarrantyExpiry = device.WarrantyExpiry,
+            OrderId = device.OrderId
+        };
+
+        var lifecycleDto = new DeviceLifecycleDto
+        {
+            DeviceInfo = deviceDto,
+            OriginalOrderCode = order?.OrderCode,
+            OriginalOrderDeliveryDate = order?.DeliveryDate,
+            RmaHistory = rmaHistory
+        };
+
+        return Ok(lifecycleDto);
     }
 }

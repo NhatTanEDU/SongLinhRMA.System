@@ -254,6 +254,7 @@ public class DevicesController : ControllerBase
                     ProblemDescription = t.ProblemDescription,
                     ServiceMode = t.ServiceMode,
                     ReceivedDate = t.ReceivedDate,
+                    SentDate = t.SentDate,
                     Status = TicketStatusHelper.ParseFromDbString(t.StatusId)
                 };
 
@@ -265,7 +266,7 @@ public class DevicesController : ControllerBase
                         LocationName = (h.LocationId != null && locationMap.ContainsKey(h.LocationId)) ? locationMap[h.LocationId].Name : "Nội bộ",
                         Note = h.Note,
                         ChangedAt = h.UpdateTime
-                    }).ToList();
+                    }).OrderBy(s => s.ChangedAt).ToList();
 
                     var latestStep = ticketDto.Steps.OrderByDescending(s => s.ChangedAt).FirstOrDefault();
                     ticketDto.CurrentLocationName = latestStep?.LocationName ?? "Nội bộ";

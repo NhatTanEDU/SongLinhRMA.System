@@ -9,12 +9,14 @@ namespace RMA.Shared.Helpers
         {
             return status switch
             {
-                TicketStatus.Pending => "Chờ tiếp nhận",
-                TicketStatus.Processing => "Đang xử lý",
-                TicketStatus.Repaired => "Đã sửa xong",
-                TicketStatus.SentToVendor => "Đã gửi hãng bảo hành",
-                TicketStatus.Completed => "Đã hoàn thành (Trả khách)",
-                TicketStatus.Cancelled => "Đã hủy",
+                TicketStatus.New => "Mới tiếp nhận",
+                TicketStatus.Diagnosing => "Đang chẩn đoán",
+                TicketStatus.WaitingApproval => "Chờ khách duyệt báo giá",
+                TicketStatus.WaitingParts => "Chờ linh kiện thay thế",
+                TicketStatus.Repairing => "Đang sửa chữa",
+                TicketStatus.WaitingVendor => "Đang gửi hãng bảo hành",
+                TicketStatus.Completed => "Đã xử lý xong",
+                TicketStatus.Closed => "Đã đóng ca & Trả khách",
                 _ => "Không xác định"
             };
         }
@@ -23,13 +25,15 @@ namespace RMA.Shared.Helpers
         {
             return status switch
             {
-                TicketStatus.Pending => "#FF9800",       // Orange
-                TicketStatus.Processing => "#2196F3",    // Blue
-                TicketStatus.Repaired => "#4CAF50",      // Green
-                TicketStatus.SentToVendor => "#9C27B0",  // Purple
-                TicketStatus.Completed => "#00G853",     // Bright Green (or #00c853)
-                TicketStatus.Cancelled => "#F44336",     // Red
-                _ => "#9E9E9E"                           // Grey
+                TicketStatus.New => "#2196F3",             // Info/Blue
+                TicketStatus.Diagnosing => "#FF9800",      // Warning/Orange
+                TicketStatus.WaitingApproval => "#FFC107",  // Warning/Amber
+                TicketStatus.WaitingParts => "#F44336",     // Error/Red
+                TicketStatus.Repairing => "#0072BC",        // Primary/Solicom Blue
+                TicketStatus.WaitingVendor => "#9C27B0",    // Secondary/Purple
+                TicketStatus.Completed => "#4CAF50",        // Success/Green
+                TicketStatus.Closed => "#424242",           // Dark Grey
+                _ => "#9E9E9E"                              // Grey
             };
         }
 
@@ -37,28 +41,30 @@ namespace RMA.Shared.Helpers
         {
             return status switch
             {
-                TicketStatus.Pending => "warning",
-                TicketStatus.Processing => "info",
-                TicketStatus.Repaired => "success",
-                TicketStatus.SentToVendor => "secondary",
+                TicketStatus.New => "info",
+                TicketStatus.Diagnosing => "warning",
+                TicketStatus.WaitingApproval => "warning",
+                TicketStatus.WaitingParts => "error",
+                TicketStatus.Repairing => "primary",
+                TicketStatus.WaitingVendor => "secondary",
                 TicketStatus.Completed => "success",
-                TicketStatus.Cancelled => "error",
+                TicketStatus.Closed => "dark",
                 _ => "default"
             };
         }
 
         public static string GetIcon(TicketStatus status)
         {
-            // Note: MudBlazor Icons are strings representing SVG paths. We will map them in the client,
-            // but we can return names or keywords here for general usage.
             return status switch
             {
-                TicketStatus.Pending => "HourglassEmpty",
-                TicketStatus.Processing => "Build",
-                TicketStatus.Repaired => "CheckCircleOutline",
-                TicketStatus.SentToVendor => "Business",
+                TicketStatus.New => "FiberNew",
+                TicketStatus.Diagnosing => "Search",
+                TicketStatus.WaitingApproval => "RateReview",
+                TicketStatus.WaitingParts => "HourglassEmpty",
+                TicketStatus.Repairing => "Handyman",
+                TicketStatus.WaitingVendor => "LocalShipping",
                 TicketStatus.Completed => "CheckCircle",
-                TicketStatus.Cancelled => "Cancel",
+                TicketStatus.Closed => "Archive",
                 _ => "HelpOutline"
             };
         }
@@ -67,38 +73,46 @@ namespace RMA.Shared.Helpers
         {
             if (string.IsNullOrWhiteSpace(statusStr))
             {
-                return TicketStatus.Pending;
+                return TicketStatus.New;
             }
 
             var lower = statusStr.Trim().ToLower();
 
             // Check standard IDs/Names
-            if (lower == "status-1" || lower == "new" || lower.Contains("pending") || lower.Contains("tiếp nhận"))
+            if (lower == "status-1" || lower == "new" || lower.Contains("mới tiếp nhận") || lower.Contains("mới"))
             {
-                return TicketStatus.Pending;
+                return TicketStatus.New;
             }
-            if (lower == "status-2" || lower == "in progress" || lower.Contains("processing") || lower.Contains("sửa chữa") || lower.Contains("xử lý"))
+            if (lower == "status-2" || lower == "in progress" || lower.Contains("chẩn đoán") || lower.Contains("tiến trình") || lower.Contains("đang xử lý"))
             {
-                return TicketStatus.Processing;
+                return TicketStatus.Diagnosing;
             }
-            if (lower == "status-3" || lower == "waiting for parts" || lower.Contains("parts") || lower.Contains("vendor") || lower.Contains("gửi hãng") || lower.Contains("hãng"))
+            if (lower.Contains("báo giá") || lower.Contains("duyệt") || lower == "waitingapproval")
             {
-                return TicketStatus.SentToVendor;
+                return TicketStatus.WaitingApproval;
             }
-            if (lower == "status-4" || lower == "repaired" || lower.Contains("sửa xong") || lower.Contains("hoàn thành sửa"))
+            if (lower == "status-3" || lower == "waiting for parts" || lower.Contains("parts") || lower.Contains("linh kiện") || lower.Contains("chờ linh kiện"))
             {
-                return TicketStatus.Repaired;
+                return TicketStatus.WaitingParts;
             }
-            if (lower == "status-5" || lower == "closed" || lower.Contains("completed") || lower.Contains("trả khách") || lower.Contains("hoàn thành"))
+            if (lower == "status-4" || lower.Contains("repairing") || lower.Contains("đang sửa") || lower.Contains("sửa chữa"))
+            {
+                return TicketStatus.Repairing;
+            }
+            if (lower.Contains("gửi hãng") || lower.Contains("hãng") || lower == "waitingvendor")
+            {
+                return TicketStatus.WaitingVendor;
+            }
+            if (lower == "repaired" || lower.Contains("đã sửa xong") || lower.Contains("xử lý xong") || lower == "completed")
             {
                 return TicketStatus.Completed;
             }
-            if (lower.Contains("cancel") || lower.Contains("hủy"))
+            if (lower == "status-5" || lower == "closed" || lower.Contains("đóng") || lower.Contains("trả khách"))
             {
-                return TicketStatus.Cancelled;
+                return TicketStatus.Closed;
             }
 
-            return TicketStatus.Pending;
+            return TicketStatus.New;
         }
     }
 }

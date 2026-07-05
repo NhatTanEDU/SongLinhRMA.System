@@ -50,16 +50,22 @@
                             <MudItem xs="12" md="6">
                                 <div class="d-flex flex-column gap-2">
                                     <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
-                                        <MudText Typo="Typo.body2" Class="text-secondary">Số Serial (S/N):</MudText>
-                                        <MudText Typo="Typo.body2" Class="fw-bold">@_lifecycleData.DeviceInfo.SerialNumber</MudText>
+                                        <MudText Typo="Typo.body2" Class="text-secondary font-weight-bold">Số Serial (S/N):</MudText>
+                                        <MudText Typo="Typo.body2" Class="fw-bold text-primary">@_lifecycleData.DeviceInfo.SerialNumber</MudText>
                                     </div>
                                     <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
-                                        <MudText Typo="Typo.body2" Class="text-secondary">Dòng sản phẩm (Model):</MudText>
+                                        <MudText Typo="Typo.body2" Class="text-secondary">Dòng máy (Model):</MudText>
                                         <MudText Typo="Typo.body2" Class="fw-bold">@_lifecycleData.DeviceInfo.ModelName (@_lifecycleData.DeviceInfo.Brand)</MudText>
                                     </div>
                                     <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
                                         <MudText Typo="Typo.body2" Class="text-secondary">Khách hàng sở hữu:</MudText>
-                                        <MudText Typo="Typo.body2" Class="fw-bold">@_lifecycleData.DeviceInfo.CustomerName</MudText>
+                                        <MudText Typo="Typo.body2" Class="fw-bold text-secondary">@_lifecycleData.DeviceInfo.CustomerName</MudText>
+                                    </div>
+                                    <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
+                                        <MudText Typo="Typo.body2" Class="text-secondary">Ngày xuất xưởng/mua:</MudText>
+                                        <MudText Typo="Typo.body2" Class="fw-bold">
+                                            @(_lifecycleData.DeviceInfo.PurchaseDate.HasValue ? _lifecycleData.DeviceInfo.PurchaseDate.Value.ToLocalTime().ToString("dd/MM/yyyy") : "Không xác định")
+                                        </MudText>
                                     </div>
                                     <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
                                         <MudText Typo="Typo.body2" Class="text-secondary">Đơn hàng bán gốc:</MudText>
@@ -72,7 +78,7 @@
                             <MudItem xs="12" md="6">
                                 <div class="d-flex flex-column gap-2">
                                     <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
-                                        <MudText Typo="Typo.body2" Class="text-secondary">Ngày hết hạn bảo hành:</MudText>
+                                        <MudText Typo="Typo.body2" Class="text-secondary">Hạn bảo hành:</MudText>
                                         <MudText Typo="Typo.body2" Class="fw-bold" Color="@(IsWarrantyValid() ? Color.Success : Color.Error)">
                                             @(_lifecycleData.DeviceInfo.WarrantyExpiry.HasValue ? _lifecycleData.DeviceInfo.WarrantyExpiry.Value.ToLocalTime().ToString("dd/MM/yyyy") : "Không có")
                                             @(IsWarrantyValid() ? " (Còn hạn)" : " (Hết hạn)")
@@ -83,7 +89,13 @@
                                         <MudText Typo="Typo.body2" Class="fw-bold">@GetCurrentLocation()</MudText>
                                     </div>
                                     <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
-                                        <MudText Typo="Typo.body2" Class="text-secondary">Trạng thái xử lý hiện tại:</MudText>
+                                        <MudText Typo="Typo.body2" Class="text-secondary">Chế độ xử lý:</MudText>
+                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">
+                                            @GetServiceModeDisplay(GetCurrentServiceMode())
+                                        </MudChip>
+                                    </div>
+                                    <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
+                                        <MudText Typo="Typo.body2" Class="text-secondary">Trạng thái hiện tại:</MudText>
                                         <span class="d-flex align-center gap-1">
                                             <MudIcon Icon="@GetStatusIcon(GetCurrentStatus())" Size="Size.Small" Style="@($"color: {TicketStatusHelper.GetColorCode(GetCurrentStatus())};")" />
                                             <MudText Typo="Typo.body2" Class="fw-bold" Style="@($"color: {TicketStatusHelper.GetColorCode(GetCurrentStatus())};")">
@@ -91,12 +103,33 @@
                                             </MudText>
                                         </span>
                                     </div>
-                                    <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
-                                        <MudText Typo="Typo.body2" Class="text-secondary">Hình thức bảo hành:</MudText>
-                                        <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">
-                                            @GetServiceModeDisplay(GetCurrentServiceMode())
-                                        </MudChip>
-                                    </div>
+                                    @if (IsSlaApplicable())
+                                    {
+                                        <div class="d-flex align-center justify-space-between py-1 border-bottom border-solid" style="border-color: #f5f5f5;">
+                                            <MudText Typo="Typo.body2" Class="text-secondary font-weight-bold">Thời hạn xử lý (SLA 14 ngày):</MudText>
+                                            @if (GetSlaRemainingDays(out double remainingDays))
+                                            {
+                                                @if (remainingDays < 0)
+                                                {
+                                                    <MudText Typo="Typo.body2" Class="fw-bold" Color="Color.Error">
+                                                        ⚡ Trễ hạn @(Math.Ceiling(Math.Abs(remainingDays))) ngày!
+                                                    </MudText>
+                                                }
+                                                else
+                                                {
+                                                    <MudText Typo="Typo.body2" Class="fw-bold" Color="Color.Success">
+                                                        Còn @(Math.Ceiling(remainingDays)) ngày
+                                                    </MudText>
+                                                }
+                                            }
+                                            else
+                                            {
+                                                <MudText Typo="Typo.body2" Class="italic text-secondary">
+                                                    Chưa ghi nhận ngày gửi đi
+                                                </MudText>
+                                            }
+                                        </div>
+                                    }
                                 </div>
                             </MudItem>
                         </MudGrid>
@@ -117,9 +150,9 @@
                     @foreach (var ticket in _lifecycleData.RmaHistory)
                     {
                         <MudPaper Class="pa-4 mb-4 rounded-xl border border-solid" Elevation="1" Style="border-color: #eaeaea;">
-                            <div class="d-flex justify-space-between align-center mb-3">
+                            <div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-2">
                                 <div class="d-flex align-center gap-2">
-                                    <MudText Typo="Typo.subtitle1" Class="fw-bold">Phiếu bảo hành: @ticket.TicketId</MudText>
+                                    <MudText Typo="Typo.subtitle1" Class="fw-bold">Phiếu: @ticket.TicketId</MudText>
                                     <MudChip T="string" Color="Color.Primary" Size="Size.Small" Variant="Variant.Text">
                                         @GetServiceModeDisplay(ticket.ServiceMode)
                                     </MudChip>
@@ -131,9 +164,18 @@
                             <MudText Typo="Typo.body2" Class="mb-3 text-secondary">
                                 <strong>Lý do tiếp nhận:</strong> @ticket.ProblemDescription
                             </MudText>
-                            <MudText Typo="Typo.caption" Class="d-block mb-3 text-secondary">
-                                Ngày tiếp nhận: @ticket.ReceivedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
-                            </MudText>
+                            
+                            <div class="d-flex justify-space-between align-center mb-3 flex-wrap gap-4">
+                                <MudText Typo="Typo.caption" Class="text-secondary">
+                                    Ngày tiếp nhận: @ticket.ReceivedDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                </MudText>
+                                @if (ticket.SentDate.HasValue)
+                                {
+                                    <MudText Typo="Typo.caption" Class="text-secondary">
+                                        Ngày gửi xử lý: @ticket.SentDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                    </MudText>
+                                }
+                            </div>
 
                             <MudText Typo="Typo.subtitle2" Class="fw-bold mb-2">Chi tiết mốc di chuyển (Timeline):</MudText>
                             
@@ -150,7 +192,7 @@
                                             <ItemContent>
                                                 <MudCard Elevation="0" Outlined="true" Class="pa-3 rounded-lg bg-light" Style="border-color: #e6e6e6;">
                                                     <div class="d-flex justify-space-between align-center gap-4 flex-wrap">
-                                                        <span class="d-flex align-center gap-1">
+                                                        <span class="d-flex align-center gap-2">
                                                             <MudIcon Icon="@GetStatusIcon(step.Status)" Size="Size.Small" Style="@($"color: {TicketStatusHelper.GetColorCode(step.Status)};")" />
                                                             <MudText Typo="Typo.body2" Class="fw-bold">
                                                                 Trạng thái: <span style="@($"color: {TicketStatusHelper.GetColorCode(step.Status)}; font-weight: bold;")">@TicketStatusHelper.GetDisplayName(step.Status)</span>
@@ -275,11 +317,9 @@
         if (string.IsNullOrEmpty(mode)) return "Không xác định";
         return mode.ToLower() switch
         {
-            "internal" => "Sửa chữa nội bộ (Internal)",
-            "external" => "Gửi hãng bảo hành (External)",
+            "internal" or "sửa chữa" => "Sửa chữa nội bộ (Internal)",
+            "external" or "bảo hành" => "Gửi hãng bảo hành (External)",
             "onsite" => "Xử lý tại chỗ/Hiện trường (Onsite)",
-            "bảo hành" => "Bảo hành (Warranty)",
-            "sửa chữa" => "Sửa chữa (Repair)",
             _ => mode
         };
     }
@@ -288,7 +328,7 @@
     {
         if (_lifecycleData == null || !_lifecycleData.RmaHistory.Any())
         {
-            return TicketStatus.Pending;
+            return TicketStatus.New;
         }
         return _lifecycleData.RmaHistory.First().Status;
     }
@@ -311,16 +351,44 @@
         return _lifecycleData.RmaHistory.First().ServiceMode;
     }
 
+    private bool IsSlaApplicable()
+    {
+        var mode = GetCurrentServiceMode()?.ToLower();
+        return mode == "external" || mode == "onsite" || mode == "bảo hành";
+    }
+
+    private bool GetSlaRemainingDays(out double remainingDays)
+    {
+        remainingDays = 0;
+        if (_lifecycleData == null || !_lifecycleData.RmaHistory.Any())
+        {
+            return false;
+        }
+
+        var latestTicket = _lifecycleData.RmaHistory.First();
+        if (!latestTicket.SentDate.HasValue)
+        {
+            return false;
+        }
+
+        var sentDate = latestTicket.SentDate.Value.ToLocalTime();
+        var deadline = sentDate.AddDays(14);
+        remainingDays = (deadline - DateTime.Now).TotalDays;
+        return true;
+    }
+
     private string GetStatusIcon(TicketStatus status)
     {
         return status switch
         {
-            TicketStatus.Pending => Icons.Material.Filled.HourglassEmpty,
-            TicketStatus.Processing => Icons.Material.Filled.Build,
-            TicketStatus.Repaired => Icons.Material.Filled.CheckCircleOutline,
-            TicketStatus.SentToVendor => Icons.Material.Filled.Business,
+            TicketStatus.New => Icons.Material.Filled.FiberNew,
+            TicketStatus.Diagnosing => Icons.Material.Filled.Search,
+            TicketStatus.WaitingApproval => Icons.Material.Filled.RateReview,
+            TicketStatus.WaitingParts => Icons.Material.Filled.HourglassEmpty,
+            TicketStatus.Repairing => Icons.Material.Filled.Handyman,
+            TicketStatus.WaitingVendor => Icons.Material.Filled.LocalShipping,
             TicketStatus.Completed => Icons.Material.Filled.CheckCircle,
-            TicketStatus.Cancelled => Icons.Material.Filled.Cancel,
+            TicketStatus.Closed => Icons.Material.Filled.Archive,
             _ => Icons.Material.Filled.HelpOutline
         };
     }

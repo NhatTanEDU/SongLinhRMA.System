@@ -18,6 +18,7 @@ namespace RMA.Shared.DTOs
         public string ProblemDescription { get; set; } = string.Empty;
         public string? ServiceMode { get; set; }
         public DateTime ReceivedDate { get; set; }
+        public DateTime? SentDate { get; set; }
         public TicketStatus Status { get; set; }
         public string? CurrentLocationName { get; set; }
         public List<RmaStepDto> Steps { get; set; } = new();

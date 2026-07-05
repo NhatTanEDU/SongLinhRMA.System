@@ -154,6 +154,45 @@
                             </MudAlert>
                         }
 
+                        <!-- Lịch sử Ticket của thiết bị -->
+                        @if (CurrentDevice?.TicketHistory != null && CurrentDevice.TicketHistory.Any())
+                        {
+                            <MudCard Elevation="0" Class="mt-3 pa-2 rounded-lg" Style="border: 1px solid var(--mud-palette-lines-default); background-color: var(--mud-palette-background-grey);">
+                                <MudText Typo="Typo.subtitle2" Class="mb-2" Color="Color.Primary">
+                                    <MudIcon Icon="@Icons.Material.Filled.History" Size="Size.Small" Class="mr-1" Style="vertical-align: text-bottom;"/>
+                                    Lịch sử bảo hành của thiết bị này (@CurrentDevice.TicketHistory.Count ca)
+                                </MudText>
+                                <MudTable Items="@CurrentDevice.TicketHistory" Dense="true" Hover="true" Elevation="0" Class="rounded-lg">
+                                    <HeaderContent>
+                                        <MudTh>Mã Ticket</MudTh>
+                                        <MudTh>Ngày nhận</MudTh>
+                                        <MudTh>Trạng thái</MudTh>
+                                        <MudTh></MudTh>
+                                    </HeaderContent>
+                                    <RowTemplate Context="hist">
+                                        <MudTd DataLabel="Mã Ticket">
+                                            <strong>@hist.TicketCode</strong>
+                                            @if (hist.TicketId == CurrentDevice.ActiveTicket?.TicketId)
+                                            {
+                                                <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2 px-1" Style="height: 18px; font-size: 10px;">Đang mở</MudChip>
+                                            }
+                                        </MudTd>
+                                        <MudTd DataLabel="Ngày nhận">@(hist.ReceivedDate?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "-")</MudTd>
+                                        <MudTd DataLabel="Trạng thái">
+                                            <MudChip T="string" Size="Size.Small" Color="@GetStatusColor(hist.Status)">
+                                                @TicketStatusHelper.GetDisplayName(hist.Status)
+                                            </MudChip>
+                                        </MudTd>
+                                        <MudTd DataLabel="" Style="text-align: right">
+                                            <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small" OnClick="@(() => OpenExistingTicket(hist.TicketId))">
+                                                Xem chi tiết
+                                            </MudButton>
+                                        </MudTd>
+                                    </RowTemplate>
+                                </MudTable>
+                            </MudCard>
+                        }
+
                         <!-- Thông báo nếu không tìm thấy S/N và hiển thị form tạo thiết bị nhanh -->
                         @if (_deviceNotFound && string.IsNullOrEmpty(Ticket.Id))
                         {
@@ -880,5 +919,21 @@
             _submitting = false;
             StateHasChanged();
         }
+    }
+
+    private Color GetStatusColor(TicketStatus status)
+    {
+        return status switch
+        {
+            TicketStatus.New => Color.Info,
+            TicketStatus.Diagnosing => Color.Warning,
+            TicketStatus.WaitingApproval => Color.Warning,
+            TicketStatus.WaitingParts => Color.Error,
+            TicketStatus.Repairing => Color.Primary,
+            TicketStatus.WaitingVendor => Color.Secondary,
+            TicketStatus.Completed => Color.Success,
+            TicketStatus.Closed => Color.Dark,
+            _ => Color.Default
+        };
     }
 }

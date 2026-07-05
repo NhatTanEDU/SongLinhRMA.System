@@ -214,10 +214,14 @@ public class DevicesController : ControllerBase
         var rmaHistory = new List<RmaTicketLifecycleDto>();
         if (tickets.Any())
         {
-            // Lấy tất cả Locations để map tên (loại bỏ StatusMaster)
+            // Lấy tất cả Locations và Statuses
             var locationsTask = _locationRepo.GetAllAsync();
-            await locationsTask;
+            var statusesTask = _statusMasterRepo.GetAllAsync();
+            await Task.WhenAll(locationsTask, statusesTask);
+            
             var locationMap = locationsTask.Result.ToDictionary(l => l.Id, l => l);
+            var statuses = statusesTask.Result.ToDictionary(s => s.Id, s => s.StatusName);
+            string GetStatusName(string? statusId) => statusId != null && statuses.TryGetValue(statusId, out var name) ? name : statusId ?? "";
 
             // Fetch status histories for all tickets in parallel or single query using FirestoreDb directly (WhereIn)
             var ticketIds = tickets.Select(t => t.Id).ToList();
@@ -255,14 +259,14 @@ public class DevicesController : ControllerBase
                     ServiceMode = t.ServiceMode,
                     ReceivedDate = t.ReceivedDate,
                     SentDate = t.SentDate,
-                    Status = TicketStatusHelper.ParseFromDbString(t.StatusId)
+                    Status = TicketStatusHelper.ParseFromDbString(GetStatusName(t.StatusId))
                 };
 
                 if (historiesByTicket.TryGetValue(t.Id, out var ticketHistories))
                 {
                     ticketDto.Steps = ticketHistories.Select(h => new RmaStepDto
                     {
-                        Status = TicketStatusHelper.ParseFromDbString(h.StatusId),
+                        Status = TicketStatusHelper.ParseFromDbString(GetStatusName(h.StatusId)),
                         LocationName = (h.LocationId != null && locationMap.ContainsKey(h.LocationId)) ? locationMap[h.LocationId].Name : "Nội bộ",
                         Note = h.Note,
                         ChangedAt = h.UpdateTime
@@ -341,20 +345,24 @@ public class DevicesController : ControllerBase
             : Task.FromResult<SalesOrder?>(null);
 
         Task<List<RmaTicket>> ticketsTask = _ticketRepo.GetByFieldAsync("DeviceId", device.Id);
+        Task<List<StatusMaster>> statusesTask = _statusMasterRepo.GetAllAsync();
 
-        await Task.WhenAll(modelTask, customerTask, orderTask, ticketsTask);
+        await Task.WhenAll(modelTask, customerTask, orderTask, ticketsTask, statusesTask);
 
         var model = modelTask.Result;
         var customer = customerTask.Result;
         var order = orderTask.Result;
         var tickets = ticketsTask.Result;
+        var statuses = statusesTask.Result.ToDictionary(s => s.Id, s => s.StatusName);
+
+        string GetStatusName(string? statusId) => statusId != null && statuses.TryGetValue(statusId, out var name) ? name : statusId ?? "";
 
         RmaTicket? activeTicket = null;
         if (tickets.Any())
         {
             activeTicket = tickets.FirstOrDefault(t => 
-                TicketStatusHelper.ParseFromDbString(t.StatusId) != TicketStatus.Completed && 
-                TicketStatusHelper.ParseFromDbString(t.StatusId) != TicketStatus.Closed);
+                TicketStatusHelper.ParseFromDbString(GetStatusName(t.StatusId)) != TicketStatus.Completed && 
+                TicketStatusHelper.ParseFromDbString(GetStatusName(t.StatusId)) != TicketStatus.Closed);
         }
 
         var latestTicket = tickets.OrderByDescending(t => t.ReceivedDate).FirstOrDefault();
@@ -367,7 +375,7 @@ public class DevicesController : ControllerBase
 
         if (latestTicket != null)
         {
-            currentStatus = TicketStatusHelper.ParseFromDbString(latestTicket.StatusId);
+            currentStatus = TicketStatusHelper.ParseFromDbString(GetStatusName(latestTicket.StatusId));
 
             var historySnapshot = await _firestoreDb.Collection("status_histories")
                 .WhereEqualTo("RmaTicketId", latestTicket.Id)
@@ -394,7 +402,7 @@ public class DevicesController : ControllerBase
             {
                 TicketId = activeTicket.Id,
                 TicketCode = activeTicket.Id,
-                Status = TicketStatusHelper.ParseFromDbString(activeTicket.StatusId),
+                Status = TicketStatusHelper.ParseFromDbString(GetStatusName(activeTicket.StatusId)),
                 SentDate = activeTicket.SentDate,
                 ReceivedDate = activeTicket.ReceivedDate
             };
@@ -448,7 +456,16 @@ public class DevicesController : ControllerBase
             DeliveryDate = order?.DeliveryDate,
             CurrentLocationName = currentLocationName,
             CurrentStatus = currentStatus,
-            ActiveTicket = activeTicketDto
+            ActiveTicket = activeTicketDto,
+            TicketHistory = tickets.OrderByDescending(t => t.ReceivedDate).Select(t => new OpenTicketSummaryDto
+            {
+                TicketId = t.Id,
+                TicketCode = t.Id,
+                Status = TicketStatusHelper.ParseFromDbString(GetStatusName(t.StatusId)),
+                SentDate = t.SentDate,
+                ReceivedDate = t.ReceivedDate,
+                LocationName = "" // Location is not deeply fetched for all histories to save reads, except latest/active which is done above.
+            }).ToList()
         };
 
         return Ok(summaryDto);

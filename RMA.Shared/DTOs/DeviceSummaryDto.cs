@@ -28,6 +28,9 @@ namespace RMA.Shared.DTOs
 
         // 5. Thông tin Ticket đang mở (nếu có)
         public OpenTicketSummaryDto? ActiveTicket { get; set; }
+
+        // 6. Lịch sử các Ticket (bao gồm cả đóng và mở)
+        public List<OpenTicketSummaryDto> TicketHistory { get; set; } = new();
     }
 
     public class OpenTicketSummaryDto

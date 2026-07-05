@@ -145,7 +145,7 @@
     
     // Donut chart variables
     private List<ChartSeries<double>> _donutSeries = new();
-    private string[] _donutLabels = { "An toàn (Xanh)", "Sắp trễ (Vàng)", "Quá hạn (Đỏ)" };
+    private string[] _donutLabels = { "An toàn (Dưới 10 ngày)", "Sắp quá hạn (10-14 ngày)", "Quá hạn (Trên 14 ngày)" };
     private ChartOptions _donutOptions = new ChartOptions
     {
         ChartPalette = new string[] { "#4caf50", "#ffb300", "#f44336" } // Green, Yellow, Red

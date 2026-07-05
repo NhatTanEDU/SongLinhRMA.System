@@ -794,9 +794,9 @@ public class RmaTicketsController : ControllerBase
         {
             TotalOpenTickets = activeTickets.Count,
             UrgentTickets = activeTickets.Count(t => t.IsUrgent),
-            GreenAlertTickets = activeTickets.Count(t => t.WarningColor == "Green"),
-            YellowAlertTickets = activeTickets.Count(t => t.WarningColor == "Yellow"),
-            RedAlertTickets = activeTickets.Count(t => t.WarningColor == "Red"),
+            GreenAlertTickets = activeTickets.Count(t => string.IsNullOrEmpty(t.WarningColor) || string.Equals(t.WarningColor, "Green", StringComparison.OrdinalIgnoreCase)),
+            YellowAlertTickets = activeTickets.Count(t => string.Equals(t.WarningColor, "Yellow", StringComparison.OrdinalIgnoreCase)),
+            RedAlertTickets = activeTickets.Count(t => string.Equals(t.WarningColor, "Red", StringComparison.OrdinalIgnoreCase)),
             
             TopVendors = activeTickets
                 .GroupBy(t => t.VendorId ?? "internal")

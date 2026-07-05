@@ -4,20 +4,36 @@ namespace RMA.Server.Services
 {
     public static class SlaCalculator
     {
-        public static (string WarningColor, bool ShouldSetUrgent) Calculate(DateTime? sentDate, DateTime utcNow, double yellowDays = 10, double redDays = 14)
+        public static (string WarningColor, bool ShouldSetUrgent) Calculate(
+            DateTime receivedDate, 
+            DateTime? sentDate, 
+            string? statusId,
+            DateTime utcNow, 
+            double yellowDays = 10, 
+            double redDays = 14)
         {
-            if (!sentDate.HasValue)
+            var status = RMA.Shared.Helpers.TicketStatusHelper.ParseFromDbString(statusId);
+
+            if (status == RMA.Shared.Enums.TicketStatus.Closed || status == RMA.Shared.Enums.TicketStatus.Completed)
             {
                 return ("Green", false);
             }
 
-            double diffDays = (utcNow - sentDate.Value).TotalDays;
+            if (status == RMA.Shared.Enums.TicketStatus.WaitingVendor && sentDate.HasValue)
+            {
+                double elapsedDays = (utcNow.Date - sentDate.Value.Date).TotalDays;
+                if (elapsedDays >= redDays) return ("Red", true);
+                if (elapsedDays >= yellowDays) return ("Yellow", false);
+                return ("Green", false);
+            }
 
-            if (diffDays >= redDays)
+            double totalElapsed = (utcNow.Date - receivedDate.Date).TotalDays;
+            
+            if (totalElapsed > redDays)
             {
                 return ("Red", true);
             }
-            else if (diffDays >= yellowDays)
+            else if (totalElapsed >= yellowDays)
             {
                 return ("Yellow", false);
             }

@@ -79,20 +79,22 @@ namespace RMA.Server.Tests
             var ticketOpenOverdue = new RmaTicket
             {
                 Id = "t-open-overdue",
-                StatusId = "status-open",
+                StatusId = "WaitingVendor",
                 CustomerId = "cust-1",
                 WarningColor = null,
                 IsUrgent = false,
+                ReceivedDate = DateTime.UtcNow.AddDays(-16),
                 SentDate = DateTime.UtcNow.AddDays(-15) // Over 14 days -> Red
             };
 
             var ticketOpenSafe = new RmaTicket
             {
                 Id = "t-open-safe",
-                StatusId = "status-open",
+                StatusId = "WaitingVendor",
                 CustomerId = "cust-1",
                 WarningColor = "Green",
                 IsUrgent = false,
+                ReceivedDate = DateTime.UtcNow.AddDays(-6),
                 SentDate = DateTime.UtcNow.AddDays(-5) // Under 10 days -> Green (unchanged)
             };
 
@@ -208,7 +210,7 @@ namespace RMA.Server.Tests
             Assert.True(capturedOpenOverdueTicket.IsUrgent);
 
             // 4. ticketOpenOverdue should trigger FCM SendAlertAsync
-            mockFcmService.Verify(f => f.SendAlertAsync("t-open-overdue", "Cong ty Song Linh", It.Is<string>(r => r.Contains("Gửi hãng quá 14 ngày"))), Times.Once);
+            mockFcmService.Verify(f => f.SendAlertAsync("t-open-overdue", "Cong ty Song Linh", It.Is<string>(r => r.Contains("Quá hạn 14 ngày"))), Times.Once);
 
             // 5. ticketOpenSafe should NOT trigger UpdateAsync
             Assert.Equal(0, openSafeUpdateCount);

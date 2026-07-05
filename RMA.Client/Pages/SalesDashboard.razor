@@ -1,10 +1,12 @@
 @page "/sales-dashboard"
 @layout SalesLayout
 @using RMA.Shared.DTOs
+@using RMA.Client.Components
 @inject HttpClient Http
 @inject ISnackbar Snackbar
 @inject IDialogService DialogService
 @inject NavigationManager NavigationManager
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <PageTitle>Quản lý Đơn Hàng Giao Nhận - Phòng Kinh Doanh</PageTitle>
@@ -16,15 +18,20 @@
             <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick='() => NavigationManager.NavigateTo("/portal")' title="Quay lại Portal" />
             <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #0072BC;">CỔNG KINH DOANH & GIAO NHẬN</MudText>
         </div>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateOrderDialog" Class="rounded-lg py-2.5 px-5 fw-bold" Style="background-color: #0072BC;">
-            Lên Đơn Hàng Mới
-        </MudButton>
+        <div class="d-flex align-center gap-2">
+            <MudButton Variant="Variant.Outlined" Color="Color.Success" StartIcon="@Icons.Material.Filled.Download" OnClick="ExportToCsv" Class="rounded-lg py-2 px-4 fw-bold">
+                Xuất Excel (CSV)
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenCreateOrderDialog" Class="rounded-lg py-2.5 px-5 fw-bold" Style="background-color: #0072BC;">
+                Lên Đơn Hàng Mới
+            </MudButton>
+        </div>
     </div>
 
     <!-- Stats Dashboard Cards -->
     <MudGrid Class="mb-8">
         <MudItem xs="12" sm="6" md="3">
-            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #0072BC; background-color: #ffffff;">
+            <MudPaper @onclick="QuickFilterToday" Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #0072BC; background-color: #ffffff; cursor: pointer;">
                 <MudAvatar Color="Color.Primary" Variant="Variant.Filled" Size="Size.Large">
                     <MudIcon Icon="@Icons.Material.Filled.Today" />
                 </MudAvatar>
@@ -36,7 +43,7 @@
         </MudItem>
 
         <MudItem xs="12" sm="6" md="3">
-            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #E51D24; background-color: #ffffff;">
+            <MudPaper @onclick="QuickFilterThisWeek" Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #E51D24; background-color: #ffffff; cursor: pointer;">
                 <MudAvatar Color="Color.Secondary" Variant="Variant.Filled" Size="Size.Large">
                     <MudIcon Icon="@Icons.Material.Filled.DateRange" />
                 </MudAvatar>
@@ -60,7 +67,7 @@
         </MudItem>
 
         <MudItem xs="12" sm="6" md="3">
-            <MudPaper Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #2e7d32; background-color: #ffffff;">
+            <MudPaper @onclick="QuickFilterDelivered" Elevation="3" Class="pa-5 rounded-xl d-flex align-center gap-4 border-solid" Style="border-left: 6px solid #2e7d32; background-color: #ffffff; cursor: pointer;">
                 <MudAvatar Color="Color.Success" Variant="Variant.Filled" Size="Size.Large">
                     <MudIcon Icon="@Icons.Material.Filled.CheckCircle" />
                 </MudAvatar>
@@ -71,6 +78,9 @@
             </MudPaper>
         </MudItem>
     </MudGrid>
+
+    <!-- Unified Filter Bar -->
+    <SalesFilterBar Query="_filterQuery" OnFilterApplied="OnFilterApplied" Customers="_customers" />
 
     <!-- Tabs Content -->
     <MudTabs Elevation="2" Rounded="true" ApplyEffectsToContainer="true" Class="rounded-xl">
@@ -88,8 +98,6 @@
                 <MudDataGrid Items="@_orders.Where(o => o.Status != "Delivered")" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
                     <ToolBarContent>
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Chưa Giao</MudText>
-                        <MudSpacer />
-                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
                     </ToolBarContent>
                     <Columns>
                         <PropertyColumn Property="x => x.OrderCode" Title="Mã Đơn" CellStyle="font-weight: bold; color: #0072BC;" />
@@ -188,8 +196,6 @@
                 <MudDataGrid Items="@_orders.Where(o => o.Status == "Delivered")" Hover="true" Striped="true" Outlined="true" Class="rounded-lg shadow-none">
                     <ToolBarContent>
                         <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #0072BC;">Danh sách Đơn Hàng Đã Giao</MudText>
-                        <MudSpacer />
-                        <MudTextField @bind-Value="_searchString" Placeholder="Tìm mã đơn, khách hàng..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
                     </ToolBarContent>
                     <Columns>
                         <PropertyColumn Property="x => x.OrderCode" Title="Mã Đơn" CellStyle="font-weight: bold; color: #2e7d32;" />
@@ -248,17 +254,27 @@
 
 @code {
     private List<SalesOrderDto> _orders = new();
+    private List<CustomerDto> _customers = new();
     private bool _loading = true;
     private bool _isLoadingOrders = false;
     private bool _pendingRefresh = false;
-    private string _searchString = "";
     private HubConnection? _hubConnection;
     private readonly Dictionary<string, DateTime> _deletedOrderIds = new();
 
     private DashboardStats _stats = new();
+    private SalesOrderQueryDto _filterQuery = new();
 
     protected override async Task OnInitializedAsync()
     {
+        try
+        {
+            _customers = await Http.GetFromJsonAsync<List<CustomerDto>>("api/customers") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading customers: {ex.Message}");
+        }
+
         await LoadOrders();
 
         var baseAddress = Http.BaseAddress?.ToString().TrimEnd('/');
@@ -287,6 +303,12 @@
         }
     }
 
+    private async Task OnFilterApplied(SalesOrderQueryDto query)
+    {
+        _filterQuery = query;
+        await LoadOrders();
+    }
+
     private async Task LoadOrders()
     {
         if (_isLoadingOrders)
@@ -300,7 +322,20 @@
 
         try
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, "api/salesorders");
+            var queryParams = new List<string>();
+            if (!string.IsNullOrEmpty(_filterQuery.SearchTerm)) queryParams.Add($"SearchTerm={Uri.EscapeDataString(_filterQuery.SearchTerm)}");
+            if (!string.IsNullOrEmpty(_filterQuery.CustomerId)) queryParams.Add($"CustomerId={Uri.EscapeDataString(_filterQuery.CustomerId)}");
+            if (!string.IsNullOrEmpty(_filterQuery.Status)) queryParams.Add($"Status={Uri.EscapeDataString(_filterQuery.Status)}");
+            if (_filterQuery.StartDate.HasValue) queryParams.Add($"StartDate={Uri.EscapeDataString(_filterQuery.StartDate.Value.ToString("o"))}");
+            if (_filterQuery.EndDate.HasValue) queryParams.Add($"EndDate={Uri.EscapeDataString(_filterQuery.EndDate.Value.ToString("o"))}");
+            
+            var url = "api/salesorders";
+            if (queryParams.Any())
+            {
+                url += "?" + string.Join("&", queryParams);
+            }
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
             request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
             {
                 NoCache = true,
@@ -339,8 +374,6 @@
         }
     }
 
-
-
     private async Task ComputeStats()
     {
         try
@@ -370,18 +403,27 @@
         }
     }
 
-    private Func<SalesOrderDto, bool> _quickFilter => x =>
+    private async Task QuickFilterToday()
     {
-        if (string.IsNullOrWhiteSpace(_searchString))
-            return true;
-        if (x.OrderCode.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (x.CustomerName.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
-            return true;
-        if (x.SalesNote.Contains(_searchString, StringComparison.OrdinalIgnoreCase))
-            return true;
-        return false;
-    };
+        _filterQuery.StartDate = DateTime.Today;
+        _filterQuery.EndDate = DateTime.Today;
+        await LoadOrders();
+    }
+
+    private async Task QuickFilterThisWeek()
+    {
+        var today = DateTime.Today;
+        int diff = (7 + (today.DayOfWeek - DayOfWeek.Monday)) % 7;
+        _filterQuery.StartDate = today.AddDays(-1 * diff);
+        _filterQuery.EndDate = today.AddDays(-1 * diff + 6);
+        await LoadOrders();
+    }
+
+    private async Task QuickFilterDelivered()
+    {
+        _filterQuery.Status = _filterQuery.Status == "Delivered" ? null : "Delivered";
+        await LoadOrders();
+    }
 
     private async Task OpenCreateOrderDialog()
     {
@@ -421,13 +463,11 @@
                 if (response.IsSuccessStatusCode)
                 {
                     Snackbar.Add("Xóa đơn hàng thành công!", Severity.Success);
-                    // ✅ OPTIMISTIC UPDATE: Đưa vào danh sách tombstone và xóa đơn khỏi danh sách hiển thị ngay lập tức
                     _deletedOrderIds[order.Id] = DateTime.UtcNow;
                     _orders.Remove(order);
                     await ComputeStats();
                     StateHasChanged();
 
-                    // Reload from server after a short delay to sync state
                     await Task.Delay(1200);
                     await LoadOrders();
                 }
@@ -447,7 +487,72 @@
     {
         var parameters = new DialogParameters { ["Order"] = order };
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
-        await DialogService.ShowAsync<SalesOrderDetailViewDialog>("Chi Tiết Đơn Hàng", parameters, options);
+        var dialog = await DialogService.ShowAsync<SalesOrderDetailViewDialog>("Chi Tiết Đơn Hàng", parameters, options);
+        var result = await dialog.Result;
+        if (result != null && !result.Canceled && result.Data is bool success && success)
+        {
+            await LoadOrders();
+        }
+    }
+
+    private async Task ExportToCsv()
+    {
+        try
+        {
+            if (!_orders.Any())
+            {
+                Snackbar.Add("Không có dữ liệu để xuất!", Severity.Warning);
+                return;
+            }
+
+            var csv = new System.Text.StringBuilder();
+            csv.AppendLine("Mã Đơn Hàng,Khách Hàng,Ngày Tạo,Ngày Giao,Trạng Thái,Ghi Chú Sale,Ghi Chú Nghiệp Vụ,Lần Sửa Cuối,Người Sửa");
+
+            foreach (var o in _orders)
+            {
+                var orderDateStr = o.OrderDate.ToLocalTime().ToString("dd/MM/yyyy HH:mm");
+                var deliveryDateStr = o.DeliveryDate.HasValue ? o.DeliveryDate.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "";
+                var statusStr = o.Status == "Pending" ? "Chờ Giao" : (o.Status == "Delivering" ? "Đang Giao" : "Đã Giao");
+                var lastUpdatedStr = o.LastUpdated.HasValue ? o.LastUpdated.Value.ToLocalTime().ToString("dd/MM/yyyy HH:mm") : "";
+
+                var orderCode = EscapeCsvField(o.OrderCode);
+                var customer = EscapeCsvField(o.CustomerName);
+                var salesNote = EscapeCsvField(o.SalesNote);
+                var note = EscapeCsvField(o.Note);
+                var updatedBy = EscapeCsvField(o.UpdatedBy);
+
+                csv.AppendLine($"{orderCode},{customer},{orderDateStr},{deliveryDateStr},{statusStr},{salesNote},{note},{lastUpdatedStr},{updatedBy}");
+            }
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(csv.ToString());
+            var bytesWithBom = new byte[bytes.Length + 3];
+            bytesWithBom[0] = 0xEF;
+            bytesWithBom[1] = 0xBB;
+            bytesWithBom[2] = 0xBF;
+            Buffer.BlockCopy(bytes, 0, bytesWithBom, 3, bytes.Length);
+
+            var base64 = Convert.ToBase64String(bytesWithBom);
+            var fileName = $"DonHangBan_{DateTime.Now:yyyyMMdd_HHmmss}.csv";
+
+            await JS.InvokeVoidAsync("fileDownload.init", fileName, "text/csv;charset=utf-8;");
+            await JS.InvokeVoidAsync("fileDownload.appendChunk", base64);
+            await JS.InvokeVoidAsync("fileDownload.save");
+            Snackbar.Add("Xuất dữ liệu thành công!", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi xuất dữ liệu: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string EscapeCsvField(string? field)
+    {
+        if (string.IsNullOrEmpty(field)) return "";
+        if (field.Contains(",") || field.Contains("\"") || field.Contains("\n") || field.Contains("\r"))
+        {
+            return $"\"{field.Replace("\"", "\"\"")}\"";
+        }
+        return field;
     }
 
     public async ValueTask DisposeAsync()

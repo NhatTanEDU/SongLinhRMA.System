@@ -87,7 +87,7 @@ namespace RMA.Server.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<SalesOrderDto>>> Get()
+        public async Task<ActionResult<IEnumerable<SalesOrderDto>>> Get([FromQuery] SalesOrderQueryDto query)
         {
             try
             {
@@ -95,7 +95,59 @@ namespace RMA.Server.Controllers
                 var orders = await _orderRepo.GetAllAsync();
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
- 
+
+                // Apply CustomerId filter
+                if (!string.IsNullOrEmpty(query.CustomerId))
+                {
+                    orders = orders.Where(o => o.CustomerId == query.CustomerId).ToList();
+                }
+
+                // Apply Status filter
+                if (!string.IsNullOrEmpty(query.Status))
+                {
+                    orders = orders.Where(o => o.Status.Equals(query.Status, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+
+                // Apply Date filters
+                if (query.StartDate.HasValue)
+                {
+                    var start = DateTime.SpecifyKind(query.StartDate.Value.Date, DateTimeKind.Utc);
+                    orders = orders.Where(o => o.OrderDate >= start).ToList();
+                }
+                if (query.EndDate.HasValue)
+                {
+                    var end = DateTime.SpecifyKind(query.EndDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+                    orders = orders.Where(o => o.OrderDate <= end).ToList();
+                }
+
+                // Apply SearchTerm filter
+                if (!string.IsNullOrEmpty(query.SearchTerm))
+                {
+                    var matchingOrderIds = new HashSet<string>();
+                    var devices = await _deviceRepo.GetAllAsync();
+                    foreach (var dev in devices)
+                    {
+                        if (!string.IsNullOrEmpty(dev.SerialNumber) && 
+                            dev.SerialNumber.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase) && 
+                            !string.IsNullOrEmpty(dev.OrderId))
+                        {
+                            matchingOrderIds.Add(dev.OrderId);
+                        }
+                    }
+
+                    orders = orders.Where(o => 
+                        (!string.IsNullOrEmpty(o.OrderCode) && o.OrderCode.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (customers.ContainsKey(o.CustomerId) && customers[o.CustomerId].Name.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(o.SalesNote) && o.SalesNote.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(o.Note) && o.Note.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        matchingOrderIds.Contains(o.Id) ||
+                        o.Details.Any(d => 
+                            (models.ContainsKey(d.ModelId) && models[d.ModelId].ModelName.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrEmpty(d.Note) && d.Note.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase))
+                        )
+                    ).ToList();
+                }
+
                 var dtos = orders.Select(o => new SalesOrderDto
                 {
                     Id = o.Id,

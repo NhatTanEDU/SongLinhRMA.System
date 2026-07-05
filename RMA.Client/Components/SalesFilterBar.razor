@@ -1,0 +1,295 @@
+@using RMA.Shared.DTOs
+@using MudBlazor
+
+<MudPaper Elevation="2" Class="pa-4 mb-4 rounded-lg bg-surface-header">
+    <MudGrid Spacing="2">
+        <!-- 🔍 Tìm kiếm tổng quát -->
+        <MudItem xs="12" md="4">
+            <MudTextField @bind-Value="Query.SearchTerm" 
+                          Label="Tìm kiếm..." 
+                          Placeholder="Mã đơn, tên KH, S/N, thiết bị, ghi chú..." 
+                          Adornment="Adornment.Start" 
+                          AdornmentIcon="@Icons.Material.Filled.Search" 
+                          Variant="Variant.Outlined" 
+                          Margin="Margin.Dense"
+                          OnDebounceIntervalElapsed="OnFilterChanged"
+                          DebounceInterval="500" />
+        </MudItem>
+
+        <!-- 👤 Lọc theo Khách hàng (Searchable AutoComplete) -->
+        <MudItem xs="12" sm="4" md="2">
+            <MudAutocomplete T="string" 
+                             Label="Khách hàng" 
+                             Value="SelectedCustomerName"
+                             SearchFunc="SearchCustomers" 
+                             ResetValueOnEmptyText="true"
+                             CoerceText="true" 
+                             Variant="Variant.Outlined" 
+                             Margin="Margin.Dense"
+                             ValueChanged="OnCustomerSelected" />
+        </MudItem>
+
+        <!-- 📊 Lọc theo Trạng thái -->
+        <MudItem xs="12" sm="4" md="2">
+            <MudSelect T="string" 
+                       Label="Trạng thái" 
+                       Value="Query.Status" 
+                       Variant="Variant.Outlined" 
+                       Margin="Margin.Dense"
+                       ValueChanged="OnStatusChanged">
+                <MudSelectItem Value="@((string)null!)">Tất cả trạng thái</MudSelectItem>
+                <MudSelectItem Value="@("Pending")">Chờ giao</MudSelectItem>
+                <MudSelectItem Value="@("Delivered")">Đã giao</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+
+        <!-- 📅 Lọc theo Thời gian -->
+        <MudItem xs="12" sm="4" md="2">
+            <MudSelect T="string" 
+                       Label="Thời gian" 
+                       Value="_selectedTimePeriod" 
+                       Variant="Variant.Outlined" 
+                       Margin="Margin.Dense"
+                       ValueChanged="OnTimePeriodChanged">
+                <MudSelectItem Value="@("All")">Tất cả thời gian</MudSelectItem>
+                <MudSelectItem Value="@("Today")">Hôm nay</MudSelectItem>
+                <MudSelectItem Value="@("Yesterday")">Hôm qua</MudSelectItem>
+                <MudSelectItem Value="@("ThisWeek")">Tuần này</MudSelectItem>
+                <MudSelectItem Value="@("ThisMonth")">Tháng này</MudSelectItem>
+                <MudSelectItem Value="@("Custom")">Tùy chọn khoảng ngày...</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+
+        <!-- 🗑️ Nút xóa bộ lọc -->
+        <MudItem xs="12" sm="12" md="2" Class="d-flex justify-end">
+            <MudButton Variant="Variant.Text" 
+                       Color="Color.Error" 
+                       StartIcon="@Icons.Material.Filled.FilterListOff" 
+                       OnClick="ClearAllFilters"
+                       Size="Size.Small">
+                Xóa bộ lọc
+            </MudButton>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Hộp thoại chọn khoảng ngày tùy chỉnh (Hiện ra khi chọn Custom) -->
+    @if (_selectedTimePeriod == "Custom")
+    {
+        <div class="mt-3 slide-down-fade">
+            <MudDateRangePicker Label="Chọn khoảng ngày" 
+                                DateRange="_dateRange" 
+                                Margin="Margin.Dense" 
+                                Variant="Variant.Outlined"
+                                DateRangeChanged="OnDateRangeChanged" />
+        </div>
+    }
+
+    <!-- 🏷️ Danh sách các Badge hiển thị bộ lọc đang hoạt động -->
+    @if (HasActiveFilters())
+    {
+        <div class="d-flex align-center gap-2 mt-3 flex-wrap">
+            <MudText Typo="Typo.caption" Class="text-muted">Đang lọc theo:</MudText>
+            @if (!string.IsNullOrEmpty(Query.SearchTerm))
+            {
+                <MudChip T="string" OnClose="() => RemoveSearchTerm()" Color="Color.Primary" Size="Size.Small">Từ khóa: @Query.SearchTerm</MudChip>
+            }
+            @if (!string.IsNullOrEmpty(Query.CustomerId))
+            {
+                <MudChip T="string" OnClose="() => RemoveCustomerFilter()" Color="Color.Info" Size="Size.Small">Khách hàng: @SelectedCustomerName</MudChip>
+            }
+            @if (!string.IsNullOrEmpty(Query.Status))
+            {
+                <MudChip T="string" OnClose="() => RemoveStatusFilter()" Color="Color.Success" Size="Size.Small">Trạng thái: @(Query.Status == "Pending" ? "Chờ giao" : "Đã giao")</MudChip>
+            }
+            @if (_selectedTimePeriod != "All")
+            {
+                <MudChip T="string" OnClose="() => RemoveTimeFilter()" Color="Color.Warning" Size="Size.Small">Thời gian: @GetTimePeriodLabel()</MudChip>
+            }
+        </div>
+    }
+</MudPaper>
+
+@code {
+    [Parameter] public SalesOrderQueryDto Query { get; set; } = new();
+    [Parameter] public EventCallback<SalesOrderQueryDto> OnFilterApplied { get; set; }
+    [Parameter] public List<CustomerDto> Customers { get; set; } = new();
+
+    private string? SelectedCustomerName { get; set; }
+    private string _selectedTimePeriod = "All";
+    private DateRange _dateRange = new DateRange();
+
+    protected override void OnParametersSet()
+    {
+        if (!string.IsNullOrEmpty(Query.CustomerId))
+        {
+            var cust = Customers.FirstOrDefault(c => c.Id == Query.CustomerId);
+            SelectedCustomerName = cust?.Name;
+        }
+        else
+        {
+            SelectedCustomerName = null;
+        }
+
+        if (Query.StartDate.HasValue && Query.EndDate.HasValue)
+        {
+            var today = DateTime.Today;
+            if (Query.StartDate.Value.Date == today && Query.EndDate.Value.Date == today)
+            {
+                _selectedTimePeriod = "Today";
+            }
+            else if (Query.StartDate.Value.Date == today.AddDays(-1) && Query.EndDate.Value.Date == today.AddDays(-1))
+            {
+                _selectedTimePeriod = "Yesterday";
+            }
+            else
+            {
+                _selectedTimePeriod = "Custom";
+                _dateRange = new DateRange(Query.StartDate.Value, Query.EndDate.Value);
+            }
+        }
+        else
+        {
+            _selectedTimePeriod = "All";
+            _dateRange = new DateRange();
+        }
+    }
+
+    private async Task OnFilterChanged()
+    {
+        await OnFilterApplied.InvokeAsync(Query);
+    }
+
+    private Task<IEnumerable<string>> SearchCustomers(string value, CancellationToken token)
+    {
+        if (string.IsNullOrEmpty(value))
+            return Task.FromResult(Customers.Select(c => c.Name));
+        return Task.FromResult(Customers
+            .Where(c => c.Name.Contains(value, StringComparison.OrdinalIgnoreCase))
+            .Select(c => c.Name));
+    }
+
+    private async Task OnCustomerSelected(string name)
+    {
+        SelectedCustomerName = name;
+        var cust = Customers.FirstOrDefault(c => c.Name == name);
+        Query.CustomerId = cust?.Id;
+        await OnFilterChanged();
+    }
+
+    private async Task OnStatusChanged(string status)
+    {
+        Query.Status = status;
+        await OnFilterChanged();
+    }
+
+    private async Task OnTimePeriodChanged(string period)
+    {
+        _selectedTimePeriod = period;
+        var today = DateTime.Today;
+
+        switch (period)
+        {
+            case "Today":
+                Query.StartDate = today;
+                Query.EndDate = today;
+                break;
+            case "Yesterday":
+                Query.StartDate = today.AddDays(-1);
+                Query.EndDate = today.AddDays(-1);
+                break;
+            case "ThisWeek":
+                int diff = (7 + (today.DayOfWeek - DayOfWeek.Monday)) % 7;
+                Query.StartDate = today.AddDays(-1 * diff);
+                Query.EndDate = today.AddDays(-1 * diff + 6);
+                break;
+            case "ThisMonth":
+                Query.StartDate = new DateTime(today.Year, today.Month, 1);
+                Query.EndDate = new DateTime(today.Year, today.Month, DateTime.DaysInMonth(today.Year, today.Month));
+                break;
+            case "Custom":
+                break;
+            default: // "All"
+                Query.StartDate = null;
+                Query.EndDate = null;
+                break;
+        }
+
+        if (period != "Custom")
+        {
+            await OnFilterChanged();
+        }
+    }
+
+    private async Task OnDateRangeChanged(DateRange range)
+    {
+        _dateRange = range;
+        Query.StartDate = range.Start;
+        Query.EndDate = range.End;
+        await OnFilterChanged();
+    }
+
+    private bool HasActiveFilters()
+    {
+        return !string.IsNullOrEmpty(Query.SearchTerm) ||
+               !string.IsNullOrEmpty(Query.CustomerId) ||
+               !string.IsNullOrEmpty(Query.Status) ||
+               _selectedTimePeriod != "All";
+    }
+
+    private async Task ClearAllFilters()
+    {
+        Query.SearchTerm = null;
+        Query.CustomerId = null;
+        Query.Status = null;
+        Query.StartDate = null;
+        Query.EndDate = null;
+        SelectedCustomerName = null;
+        _selectedTimePeriod = "All";
+        _dateRange = new DateRange();
+        await OnFilterChanged();
+    }
+
+    private async Task RemoveSearchTerm()
+    {
+        Query.SearchTerm = null;
+        await OnFilterChanged();
+    }
+
+    private async Task RemoveCustomerFilter()
+    {
+        Query.CustomerId = null;
+        SelectedCustomerName = null;
+        await OnFilterChanged();
+    }
+
+    private async Task RemoveStatusFilter()
+    {
+        Query.Status = null;
+        await OnFilterChanged();
+    }
+
+    private async Task RemoveTimeFilter()
+    {
+        Query.StartDate = null;
+        Query.EndDate = null;
+        _selectedTimePeriod = "All";
+        _dateRange = new DateRange();
+        await OnFilterChanged();
+    }
+
+    private string GetTimePeriodLabel()
+    {
+        if (_selectedTimePeriod == "Custom" && Query.StartDate.HasValue && Query.EndDate.HasValue)
+        {
+            return $"{Query.StartDate.Value.ToString("dd/MM")} - {Query.EndDate.Value.ToString("dd/MM")}";
+        }
+        return _selectedTimePeriod switch
+        {
+            "Today" => "Hôm nay",
+            "Yesterday" => "Hôm qua",
+            "ThisWeek" => "Tuần này",
+            "ThisMonth" => "Tháng này",
+            _ => "Tất cả"
+        };
+    }
+}

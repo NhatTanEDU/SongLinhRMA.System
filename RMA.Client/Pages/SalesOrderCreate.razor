@@ -69,7 +69,7 @@
         var custResp = await Http.GetFromJsonAsync<List<CustomerDto>>("api/customers");
         if (custResp != null) customers = custResp;
 
-        var modResp = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models");
+        var modResp = await Http.GetFromJsonAsync<List<ModelDto>>("api/models");
         if (modResp != null) models = modResp;
     }
 
@@ -90,7 +90,7 @@
             if (added != null)
             {
                 Snackbar.Add($"✅ Đã thêm Model: {added.ModelName} ({added.Brand})", Severity.Success);
-                var modResp = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models");
+                var modResp = await Http.GetFromJsonAsync<List<ModelDto>>("api/models");
                 if (modResp != null) models = modResp;
 
                 detail.ModelId = added.Id;

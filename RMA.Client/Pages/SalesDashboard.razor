@@ -600,7 +600,7 @@
             var totalStock = 0;
             try
             {
-                var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new();
+                var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/models") ?? new();
                 totalStock = models.Sum(m => m.StockQuantity);
             }
             catch

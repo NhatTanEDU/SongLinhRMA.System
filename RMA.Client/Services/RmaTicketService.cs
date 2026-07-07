@@ -81,12 +81,12 @@ public class RmaTicketService : IRmaTicketService
 
     public async Task<List<VendorDto>> GetVendorsAsync()
     {
-        return await _http.GetFromJsonAsync<List<VendorDto>>("api/referencedata/vendors") ?? new List<VendorDto>();
+        return await _http.GetFromJsonAsync<List<VendorDto>>("api/vendors") ?? new List<VendorDto>();
     }
 
     public async Task<List<ModelDto>> GetModelsAsync()
     {
-        return await _http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new List<ModelDto>();
+        return await _http.GetFromJsonAsync<List<ModelDto>>("api/models") ?? new List<ModelDto>();
     }
 
     public string GetBaseAddress()

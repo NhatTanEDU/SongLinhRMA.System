@@ -334,7 +334,7 @@
             _totalOrders = orders?.Count ?? 0;
 
             // Fetch models for total stock
-            var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models");
+            var models = await Http.GetFromJsonAsync<List<ModelDto>>("api/models");
             _totalStock = models?.Sum(m => m.StockQuantity) ?? 0;
 
             // Fetch rma ticket dashboard statistics

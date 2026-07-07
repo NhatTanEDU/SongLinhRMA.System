@@ -77,9 +77,11 @@ SongLinhRMA.System/
 
 ---
 
-## 🌐 4. Sơ đồ Quan hệ Thực thể (NoSQL ERD)
+## 📊 4. Sơ Đồ Kiến Trúc & Cơ Sở Dữ Liệu
 
-Dù lưu trữ trên Firestore NoSQL dưới dạng các Document độc lập, cấu trúc dữ liệu vẫn được chuẩn hóa quan hệ chặt chẽ thông qua các khóa ngoại tham chiếu chéo (`Id` $\leftrightarrow$ `Foreign Key`):
+Mặc dù hệ thống lưu trữ trên cơ sở dữ liệu NoSQL **Google Cloud Firestore** (dưới dạng Document-oriented), cấu trúc và thiết kế thực tế của Song Linh RMA vẫn được xây dựng và liên kết chặt chẽ theo dạng quan hệ (Relational) thông qua các khóa ngoại tham chiếu chéo (`Id` $\leftrightarrow$ `Foreign Key`).
+
+Dưới đây là sơ đồ Mermaid ERD chính xác 100% khớp với cấu trúc thực thể (Entity C# Classes) trong dự án `RMA.Server`:
 
 ```mermaid
 erDiagram
@@ -87,86 +89,127 @@ erDiagram
     customers ||--o{ devices : "sở hữu"
     customers ||--o{ rma_tickets : "yêu cầu bảo hành"
     categories ||--o{ models : "phân nhóm"
-    models ||--o{ devices : "định danh mẫu"
-    sales_orders ||--o{ devices : "sinh ra"
-    devices ||--o{ rma_tickets : "lịch sử sửa chữa"
+    brands ||--o{ models : "thương hiệu sản xuất"
+    models ||--o{ devices : "mẫu linh kiện/thiết bị"
+    sales_orders ||--o{ devices : "sinh ra khi giao hàng"
+    devices ||--o{ rma_tickets : "lịch sử bảo hành"
     status_masters ||--o{ rma_tickets : "trạng thái hiện tại"
-    status_masters ||--o{ status_histories : "ghi nhận nhật ký"
-    vendors |o--o{ rma_tickets : "tiếp nhận bảo hành ngoài"
-    locations |o--o{ status_histories : "kho lưu trữ vật lý"
-    rma_tickets ||--|{ status_histories : "nhật ký thay đổi"
+    status_masters ||--o{ status_histories : "trạng thái chuyển đổi"
+    vendors ||--o{ rma_tickets : "nhận sửa chữa/gửi đi"
+    locations ||--o{ status_histories : "địa điểm vật lý"
+    rma_tickets ||--|{ status_histories : "nhật ký di chuyển/tiến độ"
     rma_tickets ||--o{ attachments : "hình ảnh đính kèm"
 
     customers {
-        string Id PK
-        string Name "Tên khách hàng/đại lý"
-        string ContactPerson "Người liên hệ"
-        string Phone
-        string Email
-        string Address
-        datetime CreatedAt
+        string Id PK "Mã khách hàng (Document ID)"
+        string Name "Tên khách hàng/đại lý (Bắt buộc)"
+        string ContactPerson "Người đại diện liên hệ"
+        string Phone "Số điện thoại"
+        string Email "Địa chỉ email"
+        string Address "Địa chỉ nhận trả hàng"
+        string AvatarUrl "Đường dẫn ảnh đại diện"
+        datetime CreatedAt "Thời điểm tạo hồ sơ"
     }
 
     sales_orders {
-        string Id PK
-        string OrderCode "Mã đơn hàng"
-        string CustomerId FK "Khách hàng mua"
-        datetime OrderDate
-        datetime DeliveryDate
-        string Status "Pending/Delivered"
-        list Details "Mảng nhúng chi tiết Model + Qty"
+        string Id PK "Mã đơn hàng (Document ID)"
+        string OrderCode "Mã code đơn hàng (Bắt buộc)"
+        string CustomerId FK "Liên kết Khách hàng mua"
+        datetime OrderDate "Ngày đặt đơn hàng"
+        datetime DeliveryDate "Ngày bàn giao thực tế"
+        string Status "Trạng thái đơn (Pending/Delivered)"
+        string SalesNote "Ghi chú của Sales"
+        string Note "Ghi chú nghiệp vụ của Tech"
+        datetime LastUpdated "Lần cập nhật cuối"
+        string UpdatedBy "Người cập nhật cuối"
+        list Details "Mảng nhúng chi tiết OrderDetail"
     }
 
     models {
-        string Id PK
-        string CategoryId FK "Danh mục lớn"
-        string Brand "Hãng sản xuất"
-        string ModelName "Tên mẫu thiết bị"
-        int StockQuantity "Tồn kho thực tế"
-        int WarrantyMonths "Thời hạn bảo hành mặc định"
-        bool IsSerialRequired "Bắt buộc quét S/N"
+        string Id PK "Mã Model (Document ID)"
+        string CategoryId FK "Liên kết Danh mục sản phẩm"
+        string BrandId FK "Liên kết Hãng sản xuất"
+        string Brand "Tên thương hiệu (Dữ liệu cũ)"
+        string ModelName "Tên chi tiết dòng máy (Bắt buộc)"
+        int StockQuantity "Số lượng tồn kho thực tế"
+        int WarrantyMonths "Hạn bảo hành mặc định (Tháng)"
+        bool IsSerialRequired "Bắt buộc quét S/N khi xuất"
     }
 
     devices {
-        string Id PK
-        string SerialNumber "Mã S/N duy nhất"
-        string CustomerId FK "Chủ sở hữu hiện tại"
-        string ModelId FK "Thuộc mẫu sản phẩm nào"
-        string OrderId FK "Thuộc đơn hàng giao nào"
-        datetime PurchaseDate
+        string Id PK "Mã thiết bị (Document ID)"
+        string SerialNumber "Mã S/N duy nhất (Bắt buộc)"
+        string CustomerId FK "Khách hàng sở hữu hiện tại"
+        string ModelId FK "Thuộc dòng sản phẩm nào"
+        string OrderId FK "Thuộc đơn giao hàng nào"
+        string OrderCode "Mã đơn hàng giao"
+        datetime PurchaseDate "Ngày mua hàng thực tế"
         datetime WarrantyExpiry "Ngày hết hạn bảo hành"
     }
 
     rma_tickets {
-        string Id PK
+        string Id PK "Mã phiếu RMA (Document ID)"
         string DeviceId FK "Thiết bị bảo hành"
-        string CustomerId FK "Khách hàng gửi"
-        string StatusId FK "Trạng thái hiện tại"
-        string VendorId FK "Trung tâm bảo hành hãng tiếp nhận"
-        string ProblemDescription "Mô tả lỗi"
-        string ServiceMode "Hình thức: Warranty/Repair"
-        datetime ReceivedDate "Ngày nhận"
-        datetime SentDate "Ngày gửi đi hãng"
-        bool IsUrgent "Yêu cầu gấp"
-        string WarningColor "Màu cảnh báo quá hạn SLA"
-        string StaffNote "Ghi chú kỹ thuật"
+        string CustomerId FK "Khách hàng gửi yêu cầu"
+        string StatusId FK "Trạng thái xử lý hiện tại"
+        string VendorId FK "Đơn vị/Đối tác tiếp nhận sửa"
+        string ProblemDescription "Mô tả chi tiết lỗi (Bắt buộc)"
+        string ServiceMode "Hình thức: Warranty hoặc Repair"
+        datetime ReceivedDate "Ngày tiếp nhận bảo hành"
+        datetime SentDate "Ngày chuyển tiếp đi hãng"
+        bool IsUrgent "Cần xử lý gấp"
+        string WarningColor "Cảnh báo quá hạn SLA (Yellow/Red)"
+        string StaffNote "Ghi chú kỹ thuật nội bộ"
+        string EndUserName "Tên khách hàng cuối sử dụng"
     }
 
     status_histories {
-        string Id PK
-        string RmaTicketId FK "Thuộc vé RMA"
-        string LocationId FK "Chuyển tới địa điểm"
-        string StatusId FK "Trạng thái mới"
-        datetime UpdateTime
-        string Note "Ghi chú chi tiết thao tác"
+        string Id PK "Mã nhật ký (Document ID)"
+        string RmaTicketId FK "Thuộc phiếu RMA nào"
+        string LocationId FK "Chuyển tới địa điểm nào"
+        string StatusId FK "Trạng thái mới chuyển đổi"
+        datetime UpdateTime "Thời điểm cập nhật"
+        string Note "Ghi chú chi tiết lần cập nhật"
     }
 
     attachments {
-        string Id PK
-        string RmaTicketId FK "Thuộc vé RMA"
-        string FileUrl "Liên kết ảnh lưu trên Cloud"
-        string FileType "Loại ảnh: SN_PHOTO/CONDITION_PHOTO"
-        datetime UploadedAt
+        string Id PK "Mã file đính kèm (Document ID)"
+        string RmaTicketId FK "Thuộc phiếu RMA nào"
+        string FileUrl "Liên kết tệp lưu trên Cloud"
+        string FileType "Loại ảnh (SN_PHOTO/CONDITION_PHOTO)"
+        datetime UploadedAt "Thời gian tải lên"
+    }
+
+    brands {
+        string Id PK "Mã hãng sản xuất (Document ID)"
+        string Name "Tên hãng (Dell, HP, Apple... Bắt buộc)"
+    }
+
+    categories {
+        string Id PK "Mã danh mục (Document ID)"
+        string Name "Tên danh mục (PC, Laptop... Bắt buộc)"
+    }
+
+    vendors {
+        string Id PK "Mã đối tác (Document ID)"
+        string Name "Tên đối tác (Kết Nối Xanh... Bắt buộc)"
+        string ContactPerson "Người liên hệ đại diện"
+        string Phone "Hotline/Số điện thoại đối tác"
+        string Email "Thư điện tử hỗ trợ kỹ thuật"
+        string Address "Địa chỉ gửi bảo hành hãng"
+        string WarrantyLink "Link tra cứu bảo hành chính hãng"
+        string Note "Ghi chú kinh nghiệm làm việc"
+    }
+
+    status_masters {
+        string Id PK "Mã trạng thái (Document ID)"
+        string StatusName "Tên trạng thái (Bắt buộc)"
+        string ColorCode "Mã màu hiển thị giao diện (Hex)"
+    }
+
+    locations {
+        string Id PK "Mã địa điểm (Document ID)"
+        string Name "Tên vị trí kho/phòng ban (Bắt buộc)"
     }
 ```
 

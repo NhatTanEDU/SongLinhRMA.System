@@ -3,6 +3,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager NavigationManager
 @inject HttpClient Http
+@inject IDialogService DialogService
 @implements IAsyncDisposable
 
 <MudThemeProvider Theme="@_techTheme" />
@@ -17,6 +18,7 @@
         <MudSpacer />
         
         <RMA.Client.Components.Shared.GlobalSearchBar />
+        <MudIconButton Icon="@Icons.Material.Filled.Search" Color="Color.Inherit" OnClick="OpenGlobalSearchDialog" Class="mr-2" title="Tra cứu nhanh vòng đời thiết bị" />
 
         <MudBadge Content="@_pendingCount" Color="Color.Error" Overlap="true" Visible="@(_pendingCount > 0)" Class="mr-5">
             <MudIconButton Icon="@Icons.Material.Filled.LocalShipping" Color="Color.Inherit" OnClick="OpenPendingDeliveries" title="Đơn chờ giao" />
@@ -92,6 +94,7 @@
     {
         await LoadPendingCount();
 
+        var baseAddress = Http.BaseAddress?.ToString().TrimEnd('/');
         _hubConnection = new HubConnectionBuilder()
             .WithUrl(new Uri(Http.BaseAddress!, "salesHub"))
             .WithAutomaticReconnect()
@@ -148,6 +151,12 @@
             mockProvider.MarkUserAsLoggedOut();
             NavigationManager.NavigateTo("/login");
         }
+    }
+
+    private async Task OpenGlobalSearchDialog()
+    {
+        var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Medium, FullWidth = true };
+        await DialogService.ShowAsync<Pages.GlobalSearchDialog>("Tra cứu Vòng đời bảo hành thiết bị", options);
     }
 
     public async ValueTask DisposeAsync()

@@ -169,7 +169,7 @@
     private DashboardSummaryDto? _summary;
     
     private List<ChartSeries<double>> _donutSeries = new();
-    private string[] _donutLabels = { "An toàn", "Sắp trễ", "Quá hạn" };
+    private string[] _donutLabels = { "An toàn (Dưới 10 ngày)", "Sắp quá hạn (10-14 ngày)", "Quá hạn (Trên 14 ngày)" };
     private ChartOptions _donutOptions = new ChartOptions
     {
         ChartPalette = new string[] { "#4caf50", "#ffb300", "#f44336" }

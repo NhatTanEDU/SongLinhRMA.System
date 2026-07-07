@@ -29,6 +29,15 @@ namespace RMA.Server.Entities
         public string SalesNote { get; set; } = string.Empty;
 
         [FirestoreProperty]
+        public string Note { get; set; } = string.Empty;
+
+        [FirestoreProperty]
+        public DateTime? LastUpdated { get; set; }
+
+        [FirestoreProperty]
+        public string UpdatedBy { get; set; } = string.Empty;
+
+        [FirestoreProperty]
         public List<OrderDetail> Details { get; set; } = new List<OrderDetail>();
     }
 

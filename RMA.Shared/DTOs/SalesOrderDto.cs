@@ -13,6 +13,9 @@ namespace RMA.Shared.DTOs
         public DateTime? DeliveryDate { get; set; }
         public string Status { get; set; } = "Pending";
         public string SalesNote { get; set; } = string.Empty;
+        public string Note { get; set; } = string.Empty;
+        public DateTime? LastUpdated { get; set; }
+        public string UpdatedBy { get; set; } = string.Empty;
         public string CustomerAvatarUrl { get; set; } = string.Empty;
         public List<OrderDetailDto> Details { get; set; } = new List<OrderDetailDto>();
     }
@@ -57,5 +60,11 @@ namespace RMA.Shared.DTOs
         public string OrderId { get; set; } = string.Empty;
         public string? OrderCode { get; set; }
         public string? SalesNote { get; set; }
+    }
+
+    public class SalesOrderBusinessInfoDto
+    {
+        public string OrderCode { get; set; } = string.Empty;
+        public string Note { get; set; } = string.Empty;
     }
 }

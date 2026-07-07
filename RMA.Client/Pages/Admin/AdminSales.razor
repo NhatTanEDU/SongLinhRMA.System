@@ -269,6 +269,18 @@
             {
                 Snackbar.Add($"Đã cưỡng chế xác nhận giao thành công cho đơn hàng {(_bypassTarget.OrderCode ?? "Chưa có mã")}!", Severity.Success);
                 _showBypassDialog = false;
+
+                // ✅ OPTIMISTIC UPDATE: Cập nhật trạng thái hiển thị cục bộ sang Delivered ngay lập tức
+                var target = _orders.FirstOrDefault(o => o.Id == _bypassTarget.Id);
+                if (target != null)
+                {
+                    target.Status = "Delivered";
+                    target.DeliveryDate = DateTime.UtcNow;
+                }
+                StateHasChanged();
+
+                // Chờ Firestore cập nhật trước khi reload đồng bộ với máy chủ
+                await Task.Delay(1200);
                 await LoadOrders();
             }
             else

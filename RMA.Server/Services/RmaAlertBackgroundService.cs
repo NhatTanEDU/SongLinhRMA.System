@@ -107,10 +107,16 @@ public class RmaAlertBackgroundService : BackgroundService
                                 _logger.LogInformation("🧹 [RmaAlert] Đã làm sạch dữ liệu cảnh báo bị kẹt của phiếu Đóng #{Id}", ticket.Id);
                             }
                         }
-                        else if (ticket.SentDate.HasValue)
+                        else
                         {
                             // 3. Tính toán cảnh báo và mức độ khẩn qua SlaCalculator dùng cấu hình động
-                            var (newWarningColor, shouldSetUrgent) = SlaCalculator.Calculate(ticket.SentDate, DateTime.UtcNow, yellowDays, redDays);
+                            var (newWarningColor, shouldSetUrgent) = SlaCalculator.Calculate(
+                                ticket.ReceivedDate, 
+                                ticket.SentDate, 
+                                ticket.StatusId, 
+                                DateTime.UtcNow, 
+                                yellowDays, 
+                                redDays);
  
                             // 4. Tối ưu hóa ghi: Chỉ cập nhật nếu WarningColor hoặc IsUrgent thay đổi
                             bool isColorChanged = ticket.WarningColor != newWarningColor;
@@ -136,8 +142,8 @@ public class RmaAlertBackgroundService : BackgroundService
                                     string customerName = customers.TryGetValue(ticket.CustomerId, out var cust) ? cust.Name : "Khách hàng không xác định";
                                     
                                     // Sử dụng UTC+7 (giờ Việt Nam) cho hiển thị tin nhắn FCM
-                                    DateTime localSentDate = ticket.SentDate.Value.AddHours(7);
-                                    string reason = $"Gửi hãng quá {redDays} ngày (Từ ngày {localSentDate:dd/MM/yyyy HH:mm})";
+                                    DateTime localRefDate = (ticket.SentDate ?? ticket.ReceivedDate).AddHours(7);
+                                    string reason = $"Quá hạn {redDays} ngày (Từ ngày {localRefDate:dd/MM/yyyy HH:mm})";
  
                                     _logger.LogWarning("🚨 [RmaAlert] Phiếu RMA #{Id} đã quá hạn {RedDays} ngày! Tiến hành gửi push notification qua FCM...", ticket.Id, redDays);
                                     await _fcmService.SendAlertAsync(ticket.Id, customerName, reason);

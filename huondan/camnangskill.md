@@ -1,43 +1,41 @@
-# 📘 Cẩm Nang Kỹ Năng & Cú Pháp Antigravity
+# Cẩm nang Kỹ năng và Cú pháp Antigravity
 
-Trong hệ thống **Antigravity**, bạn không cần sử dụng các cú pháp phím tắt phức tạp (như `/dtt`). Thay vào đó, bạn chỉ cần **gọi trực tiếp tên của kỹ năng (skills)** trong câu lệnh giao tiếp tự nhiên của mình.
+Trong hệ thống Antigravity, bạn không dùng các cú pháp phím tắt (như `/dtt`) mà sẽ gọi trực tiếp tên của các kỹ năng (skills) thông qua câu lệnh tự nhiên [1, 2].
 
----
+Dưới đây là danh sách đầy đủ các skills đã được tích hợp cho Antigravity để bạn sử dụng:
 
-## 🛠️ 1. Nhóm Kỹ Năng Kỹ Thuật (Engineering Skills)
-*Dành riêng cho việc xử lý mã nguồn, sửa lỗi, thiết kế giao diện và tối ưu hóa cấu trúc dự án.*
+## 1. Nhóm Kỹ năng Kỹ thuật (Engineering Skills)
+Đây là các kỹ năng chuyên dùng để xử lý mã nguồn, giao diện và cấu trúc dự án:
 
-| Kỹ Năng (Folder Name) | Mô Tả & Công Dụng | Khi Nào Nên Sử Dụng? |
-| :--- | :--- | :--- |
-| `debugger` | Tìm kiếm nguyên nhân gốc rễ (Root Cause) của một lỗi phức tạp. | Khi gặp lỗi không mong muốn lúc chạy dự án (như lỗi kết nối Client - Server, lỗi logic) mà không rõ lý do. |
-| `triage` | Phân loại, đánh giá mức độ nghiêm trọng và lập kế hoạch xử lý lỗi. | Khi có danh sách dài các lỗi (như lỗi build sau khi nâng cấp SDK) và cần hướng dẫn thứ tự sửa lỗi ưu tiên. |
-| `prototype` | Dựng nhanh giao diện (UI) hoặc các khối logic nghiệp vụ cơ bản. | Khi muốn tạo nhanh các khung giao diện mới (ví dụ: màn hình Đăng nhập, bảng danh sách thiết bị RMA). |
-| `tdd` | Viết kiểm thử trước khi viết mã nguồn chính (Test Driven Development). | Khi viết các khối xử lý nghiệp vụ quan trọng (như AuthService, PaymentService) để đảm bảo độ chính xác ngay từ đầu. |
-| `improve-codebase-architecture` | Rà soát, tái cấu trúc (Refactor) và tối ưu hóa kiến trúc toàn bộ dự án. | Khi mã nguồn bắt đầu lộn xộn, phức tạp và bạn muốn tối ưu chuẩn kiến trúc (ví dụ: Clean Architecture). |
+- **`engineering/diagnose`**: Dùng để tìm nguyên nhân gốc rễ của một lỗi phức tạp [3].
+  - **Khi nào dùng:** Khi bạn gặp lỗi không mong muốn lúc chạy dự án (như lỗi kết nối Client - Server) mà không rõ lý do [3].
 
----
+- **`engineering/triage`**: Dùng để phân loại, đánh giá mức độ nghiêm trọng và lập kế hoạch xử lý lỗi [3].
+  - **Khi nào dùng:** Khi bạn có một danh sách dài các lỗi (ví dụ như lỗi build do sai phiên bản SDK) và cần AI hướng dẫn nên sửa lỗi nào trước, sửa như thế nào [3].
 
-## 🚀 2. Nhóm Kỹ Năng Hiệu Suất (Productivity Skills)
-*Giúp bạn quản lý luồng công việc, làm rõ yêu cầu nghiệp vụ và lưu vết tiến độ.*
+- **`engineering/prototype`**: Dùng để dựng nhanh các giao diện (UI) hoặc logic nghiệp vụ cơ bản [4].
+  - **Khi nào dùng:** Khi bạn muốn dựng khung giao diện nhanh, ví dụ như tạo form Login hoặc bảng danh sách thiết bị bằng framework giao diện [4].
 
-### 💬 `grill-me` (AI Phản Biện)
-* **Công dụng:** Kích hoạt chế độ AI đặt câu hỏi ngược lại cho bạn để làm rõ yêu cầu trước khi code.
-* **Khi nào dùng:** Khi chuẩn bị xây dựng một tính năng mới (như quản lý Ticket) nhưng chưa rõ cụ thể cần những trường dữ liệu nào, AI sẽ phỏng vấn bạn để làm rõ chi tiết.
+- **`engineering/tdd` (Test Driven Development)**: Quy trình viết kiểm thử trước khi viết mã nguồn chính [4].
+  - **Khi nào dùng:** Khi viết các hàm xử lý logic quan trọng (như AuthService hoặc DeviceService) và muốn đảm bảo code chạy đúng ngay từ đầu [2, 4].
 
-### 📝 `handoff` (Bàn Giao Công Việc)
-* **Công dụng:** Tạo ra một bản tóm tắt chi tiết về trạng thái công việc hiện tại.
-* **Khi nào dùng:** Khi kết thúc buổi làm việc, giúp tạo file ghi chú lưu tiến trình để lần tới khi mở Antigravity lên, AI hoặc các thành viên khác có thể tiếp tục công việc ngay lập tức.
+- **`engineering/improve-codebase-architecture`**: Dùng để rà soát và tối ưu hóa cấu trúc toàn bộ dự án [5].
+  - **Khi nào dùng:** Khi code bắt đầu lộn xộn, bạn muốn AI kiểm tra xem dự án đã chuẩn mô hình Clean Architecture hay chưa [5].
 
----
+## 2. Nhóm Kỹ năng Hiệu suất (Productivity Skills)
+Đây là các kỹ năng giúp bạn quản lý luồng công việc và làm rõ yêu cầu nghiệp vụ:
 
-## 💡 Cú Pháp Ra Lệnh Mẫu
-Để kích hoạt một kỹ năng, bạn chỉ cần lồng ghép tên kỹ năng đó vào câu chat tự nhiên. Ví dụ:
+- **`productivity/grill-me`**: Kích hoạt chế độ AI đặt các câu hỏi ngược lại cho bạn [5].
+  - **Khi nào dùng:** Khi bạn chuẩn bị làm một tính năng mới (như quản lý Ticket RMA) nhưng chưa rõ cụ thể cần những trường dữ liệu nào, AI sẽ hỏi để giúp bạn làm rõ yêu cầu [5].
 
-> 🔍 **Sửa lỗi:**
-> *"Sử dụng **debugger**, hãy phân tích lỗi NETSDK1045 tôi đang gặp và đưa ra các bước sửa lỗi chi tiết."*
+- **`productivity/handoff`**: Dùng để tạo ra một bản tóm tắt công việc đang làm [5].
+  - **Khi nào dùng:** Khi bạn kết thúc buổi làm việc, skill này sẽ tạo bản ghi chú để ngày mai khi mở Antigravity lên, AI (hoặc thành viên khác) biết ngay dự án đang dừng ở bước nào và có thể code tiếp tục ngay lập tức [1].
 
-> 🎨 **Thiết kế UI:**
-> *"Sử dụng **prototype**, hãy giúp tôi thiết kế giao diện hiển thị danh sách thiết bị RMA chuyên nghiệp."*
+## 💡 Cú pháp ra lệnh mẫu:
+Để kích hoạt, bạn chỉ cần đưa tên kỹ năng vào câu lệnh trò chuyện với Antigravity. Ví dụ [1, 2]:
 
-> 📋 **Báo cáo tiến độ:**
-> *"Sử dụng **handoff**, hãy tóm tắt tiến độ code của tôi ngày hôm nay."*
+> *"Sử dụng `engineering/diagnose`, hãy phân tích lỗi NETSDK1045 tôi đang gặp và đưa ra các bước sửa lỗi chi tiết."* [1]
+
+> *"Hãy gọi `engineering/prototype` giúp tôi thiết kế giao diện hiển thị danh sách thiết bị RMA chuyên nghiệp."* [1]
+
+> *"Dùng `productivity/handoff`, hãy tóm tắt tiến độ code của tôi ngày hôm nay."* [1, 5]

@@ -1,0 +1,270 @@
+@page "/admin/metrics"
+@layout AdminLayout
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+
+<PageTitle>Giám Sát Tài Nguyên & Chi Phí Firebase</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-6">
+    <!-- Header -->
+    <div class="d-flex align-center justify-space-between mb-6">
+        <div>
+            <MudText Typo="Typo.h4" Class="fw-bold text-dark" Style="color: #2C3E50;">GIÁM SÁT CHI PHÍ & TÀI NGUYÊN FIREBASE</MudText>
+            <MudText Typo="Typo.subtitle2" Class="text-secondary">Bộ đệm RAM (Singleton) & Background Service tự động Flush mỗi 5 phút giúp tối ưu 99% chi phí Firestore.</MudText>
+        </div>
+        <MudButton Variant="Variant.Filled" Color="Color.Info" StartIcon="@Icons.Material.Filled.Refresh" OnClick="LoadMetrics" Class="rounded-lg py-2.5 px-5">
+            Làm mới chỉ số
+        </MudButton>
+    </div>
+
+    <!-- System Alerts -->
+    @if (_metrics?.SystemAlerts != null && _metrics.SystemAlerts.Any())
+    {
+        <MudPaper Class="pa-4 mb-6 rounded-lg" Elevation="2" Style="background-color: #ffebee;">
+            <MudText Typo="Typo.subtitle1" Class="fw-bold text-danger mb-2">CẢNH BÁO HỆ THỐNG PHÁT HIỆN</MudText>
+            @foreach (var alert in _metrics.SystemAlerts)
+            {
+                <MudAlert Severity="Severity.Error" Variant="Variant.Filled" Class="mb-2 rounded-lg" Dense="true">@alert</MudAlert>
+            }
+        </MudPaper>
+    }
+
+    @if (_loading)
+    {
+        <div class="d-flex justify-center my-8">
+            <MudProgressCircular Color="Color.Primary" Size="Size.Large" Indeterminate="true" />
+        </div>
+    }
+    else if (_metrics != null)
+    {
+        <MudGrid>
+            <!-- SECTION 1: Firebase Resource Usage Progress & Costs -->
+            <MudItem xs="12" md="8">
+                <MudPaper Class="pa-6 rounded-xl border-solid" Style="border: 1px solid #e0e0e0; background-color: #ffffff;" Elevation="3">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4" Color="Color.Primary">Hạn Mức Tài Nguyên Trong Ngày (Firebase Spark Plan)</MudText>
+                    
+                    <!-- Reads -->
+                    <div class="mb-4">
+                        <div class="d-flex align-center justify-space-between mb-1">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Firestore Reads (Đọc tài liệu)</MudText>
+                            <MudText Typo="Typo.body2" Class="fw-bold">@_metrics.FirebaseUsage.Reads.ToString("N0") / 50,000 (@GetReadsPercentage():F1%)</MudText>
+                        </div>
+                        <MudProgressLinear Color="@GetReadsColor()" Size="Size.Medium" Value="@GetReadsPercentage()" Rounded="true" />
+                    </div>
+
+                    <!-- Writes -->
+                    <div class="mb-4">
+                        <div class="d-flex align-center justify-space-between mb-1">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Firestore Writes (Ghi/Cập nhật)</MudText>
+                            <MudText Typo="Typo.body2" Class="fw-bold">@_metrics.FirebaseUsage.Writes.ToString("N0") / 20,000 (@GetWritesPercentage():F1%)</MudText>
+                        </div>
+                        <MudProgressLinear Color="@GetWritesColor()" Size="Size.Medium" Value="@GetWritesPercentage()" Rounded="true" />
+                    </div>
+
+                    <!-- Deletes -->
+                    <div class="mb-4">
+                        <div class="d-flex align-center justify-space-between mb-1">
+                            <MudText Typo="Typo.body2" Class="fw-bold">Firestore Deletes (Xóa tài liệu)</MudText>
+                            <MudText Typo="Typo.body2" Class="fw-bold">@_metrics.FirebaseUsage.Deletes.ToString("N0") / 20,000 (@GetDeletesPercentage():F1%)</MudText>
+                        </div>
+                        <MudProgressLinear Color="@GetDeletesColor()" Size="Size.Medium" Value="@GetDeletesPercentage()" Rounded="true" />
+                    </div>
+                </MudPaper>
+            </MudItem>
+
+            <!-- SECTION 1B: Firebase Cost Breakdown Widget -->
+            <MudItem xs="12" md="4">
+                <MudPaper Class="pa-6 rounded-xl border-solid text-white d-flex flex-column justify-space-between" Style="background-color: #2C3E50; border: 1px solid #1a252f; min-height: 250px;" Elevation="3">
+                    <div>
+                        <MudText Typo="Typo.h6" Class="fw-bold mb-2">Ước Tính Chi Phí Firebase</MudText>
+                        <MudText Typo="Typo.caption" Style="color: #cbd5e1;">Quy đổi tự động dựa trên đơn giá Firebase Pay-As-You-Go</MudText>
+                        <MudDivider Light="true" Class="my-4" />
+                    </div>
+                    
+                    <div class="d-flex align-center justify-space-between">
+                        <div>
+                            <MudText Typo="Typo.subtitle2" Style="color: #94a3b8;">Chi phí phát sinh ngày hôm nay</MudText>
+                            <MudText Typo="Typo.h3" Class="fw-bold" Style="color: #008080;">$@_metrics.FirebaseUsage.EstimatedCostUsd.ToString("F4")</MudText>
+                        </div>
+                        <MudIcon Icon="@Icons.Material.Filled.AttachMoney" Style="font-size: 3.5rem; color: #008080;" />
+                    </div>
+
+                    <MudText Typo="Typo.caption" Class="mt-2" Style="color: #94a3b8; font-style: italic;">
+                        Lưu trữ hiện tại: @_metrics.FirebaseUsage.StorageGb GB | Băng thông: @_metrics.FirebaseUsage.BandwidthMb MB
+                    </MudText>
+                </MudPaper>
+            </MudItem>
+
+            <!-- SECTION 2: CHARTS -->
+            <!-- Top Collections reads/writes -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6 rounded-xl border-solid" Style="border: 1px solid #e0e0e0; background-color: #ffffff;" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Collection Firestore bị đọc nhiều nhất</MudText>
+                    @if (_metrics.FirestoreCollections.Any())
+                    {
+                        <MudChart T="double" ChartType="ChartType.Donut" ChartSeries="@GetCollectionReadsData()" ChartLabels="@GetCollectionLabels()" Width="100%" Height="300px" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="text-secondary">Chưa ghi nhận dữ liệu truy vấn Firestore.</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <!-- Top Brand/Device Stats -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6 rounded-xl border-solid" Style="border: 1px solid #e0e0e0; background-color: #ffffff;" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-4">Cơ Cấu Thiết Bị Đang Quản Lý (Hãng)</MudText>
+                    @if (_metrics.DeviceStats.Any())
+                    {
+                        <MudChart T="double" ChartType="ChartType.Pie" ChartSeries="@GetDeviceCountsData()" ChartLabels="@GetDeviceLabels()" Width="100%" Height="300px" />
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body2" Class="text-secondary">Chưa có dữ liệu thiết bị.</MudText>
+                    }
+                </MudPaper>
+            </MudItem>
+
+            <!-- SECTION 3: TABLES -->
+            <!-- Top APIs -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6 rounded-xl border-solid" Style="border: 1px solid #e0e0e0; background-color: #ffffff;" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-3">Top API Gọi Nhiều Nhất (Tải lượng & Latency)</MudText>
+                    <MudTable Items="@_metrics.TopApis" Dense="true" Bordered="false" Outlined="false" Elevation="0">
+                        <HeaderContent>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">API Route (Normalized)</MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Số Lượt</MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Latency TB</MudText></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Endpoint</MudTd>
+                            <MudTd><MudChip T="string" Color="Color.Info" Size="Size.Small" Variant="Variant.Text">@context.CallCount.ToString("N0")</MudChip></MudTd>
+                            <MudTd>@context.AvgResponseTimeMs.ToString("F0") ms</MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+
+            <!-- User Activities -->
+            <MudItem xs="12" md="6">
+                <MudPaper Class="pa-6 rounded-xl border-solid" Style="border: 1px solid #e0e0e0; background-color: #ffffff;" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-3">Tần Suất Hoạt Động Của Tài Khoản (Trong ngày)</MudText>
+                    <MudTable Items="@_metrics.UserActivities" Dense="true" Bordered="false" Outlined="false" Elevation="0">
+                        <HeaderContent>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Tài Khoản (Username)</MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Phòng ban</MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.Username</MudTd>
+                            <MudTd>@context.Department</MudTd>
+                            <MudTd><MudChip T="string" Color="Color.Warning" Size="Size.Small" Variant="Variant.Text">@context.ActionCount.ToString("N0") lần</MudChip></MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+
+            <!-- Features Usage -->
+            <MudItem xs="12">
+                <MudPaper Class="pa-6 rounded-xl border-solid" Style="border: 1px solid #e0e0e0; background-color: #ffffff;" Elevation="2">
+                    <MudText Typo="Typo.h6" Class="fw-bold mb-3">Thống Kê Tần Suất Sử Dụng Tính Năng</MudText>
+                    <MudTable Items="@_metrics.FeaturesUsage" Dense="true" Bordered="false" Outlined="false" Elevation="0">
+                        <HeaderContent>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Tính Năng Hệ Thống (Feature)</MudText></MudTh>
+                            <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Số Lần Kích Hoạt / Thao Tác</MudText></MudTh>
+                        </HeaderContent>
+                        <RowTemplate>
+                            <MudTd>@context.FeatureName</MudTd>
+                            <MudTd><MudChip T="string" Color="Color.Success" Size="Size.Small" Variant="Variant.Text">@context.UsageCount.ToString("N0") lần</MudChip></MudTd>
+                        </RowTemplate>
+                    </MudTable>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+    }
+</MudContainer>
+
+@code {
+    private SystemMetricsDashboardDto? _metrics;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMetrics();
+    }
+
+    private async Task LoadMetrics()
+    {
+        _loading = true;
+        try
+        {
+            _metrics = await Http.GetFromJsonAsync<SystemMetricsDashboardDto>("api/admin/metrics/dashboard");
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải dashboard metrics: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // Helper Progress percentages
+    private double GetReadsPercentage() => _metrics != null ? Math.Min(100.0, (_metrics.FirebaseUsage.Reads / 50000.0) * 100) : 0;
+    private double GetWritesPercentage() => _metrics != null ? Math.Min(100.0, (_metrics.FirebaseUsage.Writes / 20000.0) * 100) : 0;
+    private double GetDeletesPercentage() => _metrics != null ? Math.Min(100.0, (_metrics.FirebaseUsage.Deletes / 20000.0) * 100) : 0;
+
+    // Helper colors
+    private Color GetReadsColor() => GetColorFromPercentage(GetReadsPercentage());
+    private Color GetWritesColor() => GetColorFromPercentage(GetWritesPercentage());
+    private Color GetDeletesColor() => GetColorFromPercentage(GetDeletesPercentage());
+
+    private Color GetColorFromPercentage(double val)
+    {
+        if (val > 80) return Color.Error;
+        if (val > 50) return Color.Warning;
+        return Color.Success;
+    }
+
+    // Chart helpers
+    private List<ChartSeries<double>> GetCollectionReadsData()
+    {
+        if (_metrics == null) return new List<ChartSeries<double>>();
+        return new List<ChartSeries<double>>
+        {
+            new ChartSeries<double>
+            {
+                Name = "Lượt Đọc",
+                Data = _metrics.FirestoreCollections.Select(c => (double)c.Reads).ToArray()
+            }
+        };
+    }
+
+    private string[] GetCollectionLabels()
+    {
+        if (_metrics == null) return Array.Empty<string>();
+        return _metrics.FirestoreCollections.Select(c => $"{c.CollectionName} ({c.Reads.ToString("N0")})").ToArray();
+    }
+
+    private List<ChartSeries<double>> GetDeviceCountsData()
+    {
+        if (_metrics == null) return new List<ChartSeries<double>>();
+        return new List<ChartSeries<double>>
+        {
+            new ChartSeries<double>
+            {
+                Name = "Số Lượng",
+                Data = _metrics.DeviceStats.Select(d => (double)d.DeviceCount).ToArray()
+            }
+        };
+    }
+
+    private string[] GetDeviceLabels()
+    {
+        if (_metrics == null) return Array.Empty<string>();
+        return _metrics.DeviceStats.Select(d => $"{d.BrandName} ({d.DeviceCount})").ToArray();
+    }
+}

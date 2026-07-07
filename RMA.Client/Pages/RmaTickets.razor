@@ -1,5 +1,9 @@
 @page "/tickets"
 @layout TechLayout
+@using RMA.Shared.DTOs
+@using RMA.Shared.Enums
+@using RMA.Shared.Helpers
+@using System.Net.Http.Json
 @inject RMA.Client.Services.IRmaTicketService TicketService
 @inject RMA.Client.Services.CustomerService CustomerService
 @inject ISnackbar Snackbar
@@ -50,7 +54,6 @@
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">STT</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Khách hàng</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Thiết bị</MudText></MudTh>
-        <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Hãng</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Mô tả lỗi</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Trạng thái</MudText></MudTh>
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Hạn BH</MudText></MudTh>
@@ -58,53 +61,52 @@
         <MudTh><MudText Typo="Typo.subtitle2" Class="fw-bold">Cảnh báo SLA</MudText></MudTh>
         <MudTh Style="text-align: right"><MudText Typo="Typo.subtitle2" Class="fw-bold">Thao tác</MudText></MudTh>
     </HeaderContent>
-    <RowTemplate>
-        <MudTd DataLabel="STT">@(tickets.IndexOf(context) + 1)</MudTd>
+    <RowTemplate Context="ticketDto">
+        <MudTd DataLabel="STT">@(tickets.IndexOf(ticketDto) + 1)</MudTd>
         <MudTd DataLabel="Khách hàng">
             <div class="d-flex align-center gap-3">
-                @if (!string.IsNullOrEmpty(context.CustomerAvatarUrl))
+                @if (!string.IsNullOrEmpty(ticketDto.CustomerAvatarUrl))
                 {
                     <MudAvatar Size="Size.Medium" Class="elevation-1">
-                        <img src="@context.CustomerAvatarUrl" style="width:100%; height:100%; object-fit:cover;" />
+                        <img src="@ticketDto.CustomerAvatarUrl" style="width:100%; height:100%; object-fit:cover;" />
                     </MudAvatar>
                 }
                 else
                 {
                     <MudAvatar Color="Color.Primary" Size="Size.Medium" Variant="Variant.Filled" Class="elevation-1">
-                        @(!string.IsNullOrEmpty(context.CustomerName) ? context.CustomerName.Substring(0, 1).ToUpper() : "?")
+                        @(!string.IsNullOrEmpty(ticketDto.CustomerName) ? ticketDto.CustomerName.Substring(0, 1).ToUpper() : "?")
                     </MudAvatar>
                 }
                 <div>
-                    <MudLink Color="Color.Inherit" Underline="Underline.Hover" OnClick="@(() => OnCustomerClick(context.CustomerId))">
-                        <MudText Typo="Typo.body2" Class="fw-bold">@context.CustomerName</MudText>
+                    <MudLink Color="Color.Inherit" Underline="Underline.Hover" OnClick="@(() => OnCustomerClick(ticketDto.CustomerId))">
+                        <MudText Typo="Typo.body2" Class="fw-bold">@ticketDto.CustomerName</MudText>
                     </MudLink>
-                    @if(!string.IsNullOrEmpty(context.CustomerContactPerson)){
+                    @if(!string.IsNullOrEmpty(ticketDto.CustomerContactPerson)){
                         <MudText Typo="Typo.caption" Color="Color.Primary" Style="font-weight:600;">
-                            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Style="font-size:0.85rem;vertical-align:middle;" /> ĐD: @context.CustomerContactPerson
+                            <MudIcon Icon="@Icons.Material.Filled.PersonPin" Size="Size.Small" Style="font-size:0.85rem;vertical-align:middle;" /> ĐD: @ticketDto.CustomerContactPerson
                         </MudText>
                     }
-                    @if(!string.IsNullOrEmpty(context.CustomerPhone)){
-                        <MudText Typo="Typo.caption" Color="Color.Secondary">@context.CustomerPhone</MudText>
+                    @if(!string.IsNullOrEmpty(ticketDto.CustomerPhone)){
+                        <MudText Typo="Typo.caption" Color="Color.Secondary">@ticketDto.CustomerPhone</MudText>
                     }
-                    @if(!string.IsNullOrEmpty(context.EndUserName)){
+                    @if(!string.IsNullOrEmpty(ticketDto.EndUserName)){
                         <MudText Typo="Typo.caption" Style="color:#e65100;">
-                            👤 @context.EndUserName
+                            👤 @ticketDto.EndUserName
                         </MudText>
                     }
                 </div>
             </div>
         </MudTd>
         <MudTd DataLabel="Thiết bị">
-            <MudText Typo="Typo.body2" Class="fw-bold">@context.DeviceModelName</MudText>
-            <MudLink Color="Color.Secondary" Typo="Typo.caption" Underline="Underline.Hover" OnClick="@(() => OnSerialNumberClick(context.DeviceSerialNumber))">
-                SN: @context.DeviceSerialNumber
+            <MudText Typo="Typo.body2" Class="fw-bold">@ticketDto.DeviceModelName</MudText>
+            <MudLink Color="Color.Secondary" Typo="Typo.caption" Underline="Underline.Hover" OnClick="@(() => OnSerialNumberClick(ticketDto.DeviceSerialNumber))">
+                SN: @ticketDto.DeviceSerialNumber
             </MudLink>
         </MudTd>
-        <MudTd DataLabel="Hãng">@context.VendorName</MudTd>
         <MudTd DataLabel="Mô tả lỗi">
-            <MudTooltip Text="@context.ProblemDescription">
+            <MudTooltip Text="@ticketDto.ProblemDescription">
                 <div style="max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    @context.ProblemDescription
+                    @ticketDto.ProblemDescription
                 </div>
             </MudTooltip>
         </MudTd>
@@ -112,35 +114,39 @@
             <div class="d-flex align-center gap-2">
                 @if (_isSales)
                 {
-                    <MudChip T="string" Color="@GetStatusColor(context.StatusName)" Variant="Variant.Filled" Size="Size.Small" Style="min-width: 110px; text-align: center;">
-                        @context.StatusName
+                    var statusEnum = TicketStatusHelper.ParseFromDbString(ticketDto.StatusId);
+                    <MudChip T="string" Style="@($"color: white; background-color: {TicketStatusHelper.GetColorCode(statusEnum)}; min-width: 110px; text-align: center;")" Variant="Variant.Filled" Size="Size.Small">
+                        @TicketStatusHelper.GetDisplayName(statusEnum)
                     </MudChip>
                 }
                 else
                 {
-                    <MudSelect T="string" Value="@context.StatusId" ValueChanged="@((newId) => OnQuickStatusChanged(context, newId))" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Style="min-width: 140px; margin-top: 0;">
-                        @foreach (var s in _statuses)
+                    var currentEnum = TicketStatusHelper.ParseFromDbString(ticketDto.StatusId);
+                    <MudSelect T="TicketStatus" Value="@currentEnum" ValueChanged="@((newStatus) => OnQuickStatusChangedEnum(ticketDto, newStatus))" Variant="Variant.Outlined" Margin="Margin.Dense" Dense="true" Class="colored-select" Style="@($"--status-color: {TicketStatusHelper.GetColorCode(currentEnum)}; min-width: 190px; margin-top: 0;")">
+                        @foreach (TicketStatus status in Enum.GetValues(typeof(TicketStatus)))
                         {
-                            <MudSelectItem Value="@s.Id">@s.StatusName</MudSelectItem>
+                            <MudSelectItem Value="@status" Style="@($"color: {TicketStatusHelper.GetColorCode(status)}; font-weight: 500;")">
+                                @TicketStatusHelper.GetDisplayName(status)
+                            </MudSelectItem>
                         }
                     </MudSelect>
                 }
-                @if(context.IsUrgent) {
+                @if(ticketDto.IsUrgent) {
                     <MudChip T="string" Color="Color.Error" Size="Size.Small" Variant="Variant.Outlined">Gấp</MudChip>
                 }
             </div>
         </MudTd>
         <MudTd DataLabel="Hạn BH">
-            @if (context.DeviceWarrantyExpiry.HasValue)
+            @if (ticketDto.DeviceWarrantyExpiry.HasValue)
             {
-                var isActive = context.DeviceWarrantyExpiry.Value > DateTime.Now;
-                <MudTooltip Text="@($"Hạn BH: {context.DeviceWarrantyExpiry.Value:dd/MM/yyyy}")">
+                var isActive = ticketDto.DeviceWarrantyExpiry.Value > DateTime.Now;
+                <MudTooltip Text="@($"Hạn BH: {ticketDto.DeviceWarrantyExpiry.Value:dd/MM/yyyy}")">
                     <MudChip T="string"
                              Color="@(isActive ? Color.Success : Color.Error)"
                              Size="Size.Small"
                              Icon="@(isActive ? Icons.Material.Filled.Verified : Icons.Material.Filled.GppBad)"
                              Variant="Variant.Filled">
-                        @(isActive ? "Còn BH" : "Hết BH")
+                         @(isActive ? "Còn BH" : "Hết BH")
                     </MudChip>
                 </MudTooltip>
             }
@@ -150,34 +156,54 @@
             }
         </MudTd>
         <MudTd DataLabel="Ngày nhận">
-            <MudText Typo="Typo.body2">N: @context.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
-            @if(context.SentDate.HasValue){
-                <MudText Typo="Typo.caption" Color="Color.Secondary">G: @context.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
+            <MudText Typo="Typo.body2">N: @ticketDto.ReceivedDate.ToString("dd/MM/yyyy")</MudText>
+            @if(ticketDto.SentDate.HasValue){
+                <MudText Typo="Typo.caption" Color="Color.Secondary">G: @ticketDto.SentDate.Value.ToString("dd/MM/yyyy")</MudText>
             }
         </MudTd>
         <MudTd DataLabel="Cảnh báo SLA">
-            @if (context.StatusName == "Closed")
-            {
-                <MudChip T="string" Color="Color.Info" Icon="@Icons.Material.Filled.DoneAll" Size="Size.Small">
-                    Đã hoàn tất
-                </MudChip>
+            @{
+                var curStatus = TicketStatusHelper.ParseFromDbString(ticketDto.StatusId);
+                var totalElapsed = (DateTime.UtcNow.Date - ticketDto.ReceivedDate.Date).Days;
             }
-            else if (context.WarningColor == "Red")
-            {
-                <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small">
-                    Quá hạn (>= 14 ngày)
-                </MudChip>
-            }
-            else if (context.WarningColor == "Yellow")
-            {
-                <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small">
-                    Sắp trễ hạn (10-13 ngày)
-                </MudChip>
-            }
-            else if (context.WarningColor == "Green")
+            @if (curStatus == TicketStatus.Closed || curStatus == TicketStatus.Completed)
             {
                 <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small">
-                    An toàn
+                    Đã hoàn tất ✔️
+                </MudChip>
+            }
+            else if (curStatus == TicketStatus.WaitingVendor && ticketDto.SentDate.HasValue)
+            {
+                var elapsedDays = (DateTime.UtcNow.Date - ticketDto.SentDate.Value.Date).Days;
+                if (elapsedDays < 10)
+                {
+                    <MudChip T="string" Color="Color.Success" Icon="@Icons.Material.Filled.CheckCircle" Size="Size.Small">
+                        Bình thường (@elapsedDays/14 ngày)
+                    </MudChip>
+                }
+                else if (elapsedDays >= 10 && elapsedDays <= 13)
+                {
+                    <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small">
+                        Sắp đến hạn (@elapsedDays/14 ngày)
+                    </MudChip>
+                }
+                else
+                {
+                    <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="pulse-red-animation" Style="font-weight: bold; color: white;">
+                        QUÁ HẠN HÃng (@elapsedDays/14 ngày)
+                    </MudChip>
+                }
+            }
+            else if (totalElapsed > 14 && curStatus != TicketStatus.Closed && curStatus != TicketStatus.Completed)
+            {
+                <MudChip T="string" Color="Color.Error" Icon="@Icons.Material.Filled.Warning" Size="Size.Small" Class="pulse-red-animation" Style="font-weight: bold; color: white;">
+                    QUÁ HẠN (@totalElapsed ngày)
+                </MudChip>
+            }
+            else if (totalElapsed >= 10 && totalElapsed <= 14)
+            {
+                <MudChip T="string" Color="Color.Warning" Icon="@Icons.Material.Filled.Schedule" Size="Size.Small">
+                    Sắp đến hạn (@totalElapsed/14 ngày)
                 </MudChip>
             }
             else 
@@ -189,15 +215,15 @@
         </MudTd>
         <MudTd DataLabel="Thao tác" Style="text-align: right; white-space: nowrap;">
             <MudTooltip Text="Xem chi tiết">
-                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenDetailDialog(context))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Visibility" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenDetailDialog(ticketDto))" />
             </MudTooltip>
             @if (!_isSales)
             {
                 <MudTooltip Text="Chỉnh sửa">
-                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Info" OnClick="@(() => OpenEditDialog(context))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Info" OnClick="@(() => OpenEditDialog(ticketDto))" />
                 </MudTooltip>
                 <MudTooltip Text="Xóa">
-                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteTicket(context.Id))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteTicket(ticketDto.Id))" />
                 </MudTooltip>
             }
         </MudTd>
@@ -331,6 +357,9 @@
 
     private async Task LoadData()
     {
+        allTickets.Clear();
+        tickets.Clear();
+
         var ticketsTask = TicketService.GetRmaTicketsAsync();
         var statusesTask = TicketService.GetStatusesAsync();
         var customersTask = CustomerService.GetCustomersAsync();
@@ -391,6 +420,47 @@
         }
     }
 
+    private async Task OnQuickStatusChangedEnum(RmaTicketDto ticket, TicketStatus newStatus)
+    {
+        var newStatusStr = newStatus.ToString();
+        
+        // Cần đảm bảo lưu lại giá trị cũ nếu API gặp lỗi
+        var oldStatusId = ticket.StatusId;
+        var oldStatusName = ticket.StatusName;
+        var oldStatusColor = ticket.StatusColorCode;
+        var oldWarningColor = ticket.WarningColor;
+        var oldIsUrgent = ticket.IsUrgent;
+
+        // Cập nhật giao diện lập tức (Optimistic UI update)
+        ticket.StatusId = newStatusStr;
+        ticket.StatusName = TicketStatusHelper.GetDisplayName(newStatus);
+        ticket.StatusColorCode = TicketStatusHelper.GetColorCode(newStatus);
+        
+        if (newStatus == TicketStatus.Closed)
+        {
+            ticket.WarningColor = null;
+            ticket.IsUrgent = false;
+        }
+        StateHasChanged();
+
+        var success = await TicketService.UpdateRmaTicketAsync(ticket.Id, ticket);
+        if (success)
+        {
+            Snackbar.Add($"Đã cập nhật trạng thái thành công sang '{ticket.StatusName}'!", Severity.Success);
+        }
+        else
+        {
+            // Rollback UI update
+            ticket.StatusId = oldStatusId;
+            ticket.StatusName = oldStatusName;
+            ticket.StatusColorCode = oldStatusColor;
+            ticket.WarningColor = oldWarningColor;
+            ticket.IsUrgent = oldIsUrgent;
+            StateHasChanged();
+            Snackbar.Add("Có lỗi xảy ra khi cập nhật trạng thái.", Severity.Error);
+        }
+    }
+
     private async Task OpenCreateDialog()
     {
         var options = new DialogOptions { CloseOnEscapeKey = true, MaxWidth = MaxWidth.Large, FullWidth = true };
@@ -403,14 +473,9 @@
         var dialog = await DialogService.ShowAsync<RmaTicketDialog>("Tạo RMA Ticket Mới", parameters, options);
         var result = await dialog.Result;
 
-        if (result != null && !result.Canceled && result.Data is RmaTicketDto newTicket)
+        if (result != null && !result.Canceled)
         {
-            var created = await TicketService.CreateRmaTicketAsync(newTicket);
-            if (created != null)
-            {
-                Snackbar.Add("Tạo RMA Ticket thành công!", Severity.Success);
-                await LoadData();
-            }
+            await LoadData();
         }
     }
 

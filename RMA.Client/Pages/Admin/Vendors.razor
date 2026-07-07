@@ -1,0 +1,247 @@
+@page "/admin/vendors"
+@layout AdminLayout
+@attribute [Authorize(Roles = "Admin")]
+@using RMA.Shared.DTOs
+@inject HttpClient Http
+@inject ISnackbar Snackbar
+@inject IDialogService DialogService
+
+<PageTitle>Quản Trị Nhà Cung Cấp / TTBH - SOLICOM</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="mt-4">
+    <div class="mb-6">
+        <MudText Typo="Typo.h4" Class="fw-bold" Style="color: #2C3E50;">QUẢN LÝ NHÀ CUNG CẤP & TTBH</MudText>
+        <MudText Typo="Typo.body2" Class="text-secondary">Danh bạ liên lạc đối tác bảo hành, nơi gửi thiết bị sửa chữa ngoài.</MudText>
+    </div>
+
+    <div class="pa-6 bg-white rounded-xl shadow-sm">
+        <div class="d-flex justify-end mb-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Filled.Add" OnClick="OpenAddDialog" Class="rounded-lg py-2">
+                Thêm Vendor
+            </MudButton>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="d-flex justify-center my-8">
+                <MudProgressCircular Color="Color.Primary" Indeterminate="true" />
+            </div>
+        }
+        else
+        {
+            <MudDataGrid Items="@_vendors" Hover="true" Striped="true" Outlined="true" Class="rounded-lg">
+                <ToolBarContent>
+                    <MudText Typo="Typo.h6" Class="fw-bold" Style="color: #2C3E50;">Danh Sách Đối Tác</MudText>
+                    <MudSpacer />
+                    <MudTextField @bind-Value="_searchQuery" Placeholder="Tìm tên, hotline, người liên hệ..." Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" Margin="Margin.Dense" Variant="Variant.Outlined" Immediate="true" />
+                </ToolBarContent>
+                <Columns>
+                    <PropertyColumn Property="x => x.Name" Title="Tên Đơn Vị" CellStyle="font-weight: bold; color: #2C3E50;" />
+                    <PropertyColumn Property="x => x.ContactPerson" Title="Người Liên Hệ" />
+                    <PropertyColumn Property="x => x.Phone" Title="SĐT / Hotline" />
+                    <PropertyColumn Property="x => x.Address" Title="Địa Chỉ" />
+                    <PropertyColumn Property="x => x.WarrantyLink" Title="Link Tra Cứu Hãng" />
+                    <TemplateColumn Title="Thao Tác" HeaderStyle="text-align: right;" CellStyle="text-align: right; white-space: nowrap;">
+                        <CellTemplate>
+                            <MudTooltip Text="Sửa">
+                                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small" Color="Color.Primary" OnClick="@(() => OpenEditDialog(context.Item))" />
+                            </MudTooltip>
+                            <MudTooltip Text="Xóa">
+                                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small" Color="Color.Error" OnClick="@(() => DeleteVendor(context.Item))" />
+                            </MudTooltip>
+                        </CellTemplate>
+                    </TemplateColumn>
+                </Columns>
+                <PagerContent>
+                    <MudDataGridPager T="VendorDto" />
+                </PagerContent>
+            </MudDataGrid>
+        }
+    </div>
+
+    @if (_showDialog)
+    {
+        <div class="custom-dialog-backdrop">
+            <div class="custom-dialog-box pa-6 rounded-xl" style="max-width: 600px;">
+                <MudText Typo="Typo.h6" Class="fw-bold mb-4" Style="color: #2C3E50;">
+                    @(string.IsNullOrEmpty(_editingEntity.Id) ? "THÊM VENDOR MỚI" : "CẬP NHẬT VENDOR")
+                </MudText>
+                
+                <MudForm @ref="_form" @bind-IsValid="@_formIsValid">
+                    <MudTextField @bind-Value="_editingEntity.Name" Label="Tên Đơn Vị Cung Cấp / TTBH" Variant="Variant.Outlined" Required="true" RequiredError="Tên là bắt buộc!" Class="mb-4" />
+                    
+                    <MudGrid>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="_editingEntity.ContactPerson" Label="Người liên hệ" Variant="Variant.Outlined" Class="mb-4" />
+                        </MudItem>
+                        <MudItem xs="12" sm="6">
+                            <MudTextField @bind-Value="_editingEntity.Phone" Label="SĐT / Hotline" Variant="Variant.Outlined" Class="mb-4" />
+                        </MudItem>
+                    </MudGrid>
+                    
+                    <MudTextField @bind-Value="_editingEntity.Email" Label="Email hỗ trợ" Variant="Variant.Outlined" Class="mb-4" />
+                    <MudTextField @bind-Value="_editingEntity.Address" Label="Địa chỉ gửi hàng" Variant="Variant.Outlined" Class="mb-4" />
+                    <MudTextField @bind-Value="_editingEntity.WarrantyLink" Label="Link tra cứu S/N hãng" Variant="Variant.Outlined" Class="mb-4" />
+                    <MudTextField @bind-Value="_editingEntity.Note" Label="Ghi chú kinh nghiệm làm việc" Variant="Variant.Outlined" Lines="3" Class="mb-4" />
+                </MudForm>
+
+                <div class="d-flex justify-end gap-3">
+                    <MudButton Variant="Variant.Outlined" Color="Color.Default" OnClick="CloseDialog" Class="rounded-lg">Hủy bỏ</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="Save" Disabled="@(!_formIsValid || _actionSaving)" Class="rounded-lg px-6">
+                        Lưu Thay Đổi
+                    </MudButton>
+                </div>
+            </div>
+        </div>
+    }
+</MudContainer>
+
+<style>
+    .custom-dialog-backdrop {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.4);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1200;
+    }
+    .custom-dialog-box {
+        background-color: #ffffff;
+        width: 90%;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+        border-top: 6px solid #2C3E50;
+    }
+</style>
+
+@code {
+    private bool _loading = true;
+    private bool _actionSaving = false;
+    private List<VendorDto> _vendors = new();
+    private string _searchQuery = "";
+
+    private bool _showDialog = false;
+    private VendorDto _editingEntity = new();
+    private MudForm? _form;
+    private bool _formIsValid = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        _loading = true;
+        try
+        {
+            _vendors = await Http.GetFromJsonAsync<List<VendorDto>>("api/vendors") ?? new();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi tải dữ liệu: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OpenAddDialog()
+    {
+        _editingEntity = new VendorDto();
+        _showDialog = true;
+    }
+
+    private void OpenEditDialog(VendorDto vendor)
+    {
+        _editingEntity = new VendorDto
+        {
+            Id = vendor.Id,
+            Name = vendor.Name,
+            ContactPerson = vendor.ContactPerson,
+            Phone = vendor.Phone,
+            Email = vendor.Email,
+            Address = vendor.Address,
+            WarrantyLink = vendor.WarrantyLink,
+            Note = vendor.Note
+        };
+        _showDialog = true;
+    }
+
+    private void CloseDialog()
+    {
+        _showDialog = false;
+    }
+
+    private async Task Save()
+    {
+        if (_form != null) await _form.ValidateAsync();
+        if (!_formIsValid) return;
+
+        _actionSaving = true;
+        try
+        {
+            HttpResponseMessage response;
+            if (string.IsNullOrEmpty(_editingEntity.Id))
+            {
+                response = await Http.PostAsJsonAsync("api/vendors", _editingEntity);
+            }
+            else
+            {
+                response = await Http.PutAsJsonAsync($"api/vendors/{_editingEntity.Id}", _editingEntity);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                Snackbar.Add("Lưu thành công!", Severity.Success);
+                _showDialog = false;
+                await LoadData();
+            }
+            else
+            {
+                Snackbar.Add("Không thể lưu.", Severity.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            _actionSaving = false;
+        }
+    }
+
+    private async Task DeleteVendor(VendorDto vendor)
+    {
+        bool? confirm = await DialogService.ShowMessageBoxAsync(
+            "Xác nhận xóa",
+            $"Bạn có chắc chắn muốn xóa đối tác '{vendor.Name}' không?",
+            yesText: "Xóa", cancelText: "Hủy bỏ");
+
+        if (confirm == true)
+        {
+            try
+            {
+                var response = await Http.DeleteAsync($"api/vendors/{vendor.Id}");
+                if (response.IsSuccessStatusCode)
+                {
+                    Snackbar.Add("Xóa thành công!", Severity.Success);
+                    await LoadData();
+                }
+                else
+                {
+                    Snackbar.Add("Xóa thất bại.", Severity.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Lỗi: {ex.Message}", Severity.Error);
+            }
+        }
+    }
+}

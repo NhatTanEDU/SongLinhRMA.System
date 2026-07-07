@@ -187,6 +187,13 @@ public class RmaTicketsController : ControllerBase
     [Authorize(Roles = "Admin,Tech")]
     public async Task<ActionResult<RmaTicketDto>> Post([FromBody] RmaTicketCreateDto dto)
     {
+        if (string.IsNullOrEmpty(dto.StatusId))
+        {
+            var statuses = await _statusRepo.GetAllAsync();
+            var newStatus = statuses.FirstOrDefault(s => s.StatusName.ToLower().Contains("new") || s.StatusName.ToLower().Contains("mới"));
+            dto.StatusId = newStatus?.Id ?? statuses.FirstOrDefault()?.Id ?? string.Empty;
+        }
+
         var entity = new RmaTicket
         {
             DeviceId = dto.DeviceId,
@@ -537,13 +544,32 @@ public class RmaTicketsController : ControllerBase
 
         var activeTickets = tickets.Where(t => activeStatusIds.Contains(t.StatusId)).ToList();
 
+        int greenCount = 0;
+        int yellowCount = 0;
+        int redCount = 0;
+        var utcNow = DateTime.UtcNow;
+
+        foreach (var t in activeTickets)
+        {
+            var (color, isUrgent) = RMA.Server.Services.SlaCalculator.Calculate(
+                t.ReceivedDate,
+                t.SentDate,
+                t.StatusId,
+                utcNow,
+                10, 14); // use defaults for dashboard sync
+
+            if (color == "Red") redCount++;
+            else if (color == "Yellow") yellowCount++;
+            else greenCount++;
+        }
+
         var summary = new DashboardSummaryDto
         {
             TotalOpenTickets = activeTickets.Count,
             UrgentTickets = activeTickets.Count(t => t.IsUrgent),
-            GreenAlertTickets = activeTickets.Count(t => t.WarningColor == "Green"),
-            YellowAlertTickets = activeTickets.Count(t => t.WarningColor == "Yellow"),
-            RedAlertTickets = activeTickets.Count(t => t.WarningColor == "Red"),
+            GreenAlertTickets = greenCount,
+            YellowAlertTickets = yellowCount,
+            RedAlertTickets = redCount,
             
             TopVendors = activeTickets
                 .GroupBy(t => t.VendorId ?? "internal")

@@ -173,7 +173,11 @@
                         </ToolBarContent>
                         <Columns>
                             <PropertyColumn Property="x => x.ModelName" Title="Tên Dòng Máy (Model)" CellStyle="font-weight: bold; color: #2C3E50;" />
-                            <PropertyColumn Property="x => x.Brand" Title="Thương Hiệu" />
+                            <TemplateColumn Title="Thương Hiệu">
+                                <CellTemplate>
+                                    @(_brands.FirstOrDefault(b => b.Id == context.Item.BrandId)?.Name ?? "Chưa rõ")
+                                </CellTemplate>
+                            </TemplateColumn>
                             <TemplateColumn Title="Danh Mục">
                                 <CellTemplate>
                                     @(_categories.FirstOrDefault(c => c.Id == context.Item.CategoryId)?.Name ?? "Phổ thông")
@@ -260,7 +264,12 @@
                 
                 <MudForm @ref="_modelForm" @bind-IsValid="@_modelFormIsValid">
                     <MudTextField @bind-Value="_editingModel.ModelName" Label="Tên Dòng Máy (Model Name)" Variant="Variant.Outlined" Required="true" RequiredError="Tên dòng máy là bắt buộc!" Class="mb-4" />
-                    <MudTextField @bind-Value="_editingModel.Brand" Label="Thương Hiệu" Variant="Variant.Outlined" Required="true" RequiredError="Thương hiệu là bắt buộc!" Class="mb-4" />
+                    <MudSelect @bind-Value="_editingModel.BrandId" Label="Thương Hiệu" Variant="Variant.Outlined" Required="true" Class="mb-4">
+                        @foreach (var brand in _brands)
+                        {
+                            <MudSelectItem Value="@brand.Id">@brand.Name</MudSelectItem>
+                        }
+                    </MudSelect>
                     
                     <MudSelect @bind-Value="_editingModel.CategoryId" Label="Danh Mục Sản Phẩm" Variant="Variant.Outlined" Required="true" Class="mb-4">
                         @foreach (var cat in _categories)
@@ -343,6 +352,7 @@
     
     private List<ModelDto> _models = new();
     private List<CategoryDto> _categories = new();
+    private List<BrandDto> _brands = new();
 
     private string _modelSearch = "";
 
@@ -376,7 +386,8 @@
         try
         {
             _categories = await Http.GetFromJsonAsync<List<CategoryDto>>("api/referencedata/categories") ?? new();
-            _models = await Http.GetFromJsonAsync<List<ModelDto>>("api/referencedata/models") ?? new();
+            _models = await Http.GetFromJsonAsync<List<ModelDto>>("api/models") ?? new();
+            _brands = await Http.GetFromJsonAsync<List<BrandDto>>("api/brands") ?? new();
         }
         catch (Exception ex)
         {
@@ -452,7 +463,7 @@
         {
             Id = model.Id,
             ModelName = model.ModelName,
-            Brand = model.Brand,
+            BrandId = model.BrandId,
             CategoryId = model.CategoryId,
             StockQuantity = model.StockQuantity,
             WarrantyMonths = model.WarrantyMonths,
@@ -477,11 +488,11 @@
             HttpResponseMessage response;
             if (string.IsNullOrEmpty(_editingModel.Id))
             {
-                response = await Http.PostAsJsonAsync("api/referencedata/models", _editingModel);
+                response = await Http.PostAsJsonAsync("api/models", _editingModel);
             }
             else
             {
-                response = await Http.PutAsJsonAsync($"api/referencedata/models/{_editingModel.Id}", _editingModel);
+                response = await Http.PutAsJsonAsync($"api/models/{_editingModel.Id}", _editingModel);
             }
 
             if (response.IsSuccessStatusCode)
@@ -510,7 +521,7 @@
         model.IsSerialRequired = !model.IsSerialRequired;
         try
         {
-            var response = await Http.PutAsJsonAsync($"api/referencedata/models/{model.Id}", model);
+            var response = await Http.PutAsJsonAsync($"api/models/{model.Id}", model);
             if (response.IsSuccessStatusCode)
             {
                 Snackbar.Add($"Đã cập nhật quy tắc S/N cho dòng máy '{model.ModelName}'!", Severity.Success);
@@ -538,7 +549,7 @@
         {
             try
             {
-                var response = await Http.DeleteAsync($"api/referencedata/models/{model.Id}");
+                var response = await Http.DeleteAsync($"api/models/{model.Id}");
                 if (response.IsSuccessStatusCode)
                 {
                     Snackbar.Add("Xóa dòng máy thành công!", Severity.Success);

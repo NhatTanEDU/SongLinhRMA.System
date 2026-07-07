@@ -56,9 +56,10 @@ builder.Services.AddCors(options =>
     options.AddPolicy("AllowBlazorWasm",
         policy =>
         {
-            policy.AllowAnyOrigin()
+            policy.SetIsOriginAllowed(origin => true)
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials();
         });
 });
 
@@ -94,6 +95,7 @@ builder.Services.AddSingleton(firestoreDb);
 builder.Services.AddScoped<FirestoreRepository<Customer>>(provider => new FirestoreRepository<Customer>(provider.GetRequiredService<FirestoreDb>(), "customers", provider.GetService<IMemoryCache>()));
 builder.Services.AddScoped<FirestoreRepository<Device>>(provider => new FirestoreRepository<Device>(provider.GetRequiredService<FirestoreDb>(), "devices", provider.GetService<IMemoryCache>()));
 builder.Services.AddScoped<FirestoreRepository<Vendor>>(provider => new FirestoreRepository<Vendor>(provider.GetRequiredService<FirestoreDb>(), "vendors", provider.GetService<IMemoryCache>()));
+builder.Services.AddScoped<FirestoreRepository<Brand>>(provider => new FirestoreRepository<Brand>(provider.GetRequiredService<FirestoreDb>(), "brands", provider.GetService<IMemoryCache>()));
 builder.Services.AddScoped<FirestoreRepository<Model>>(provider => new FirestoreRepository<Model>(provider.GetRequiredService<FirestoreDb>(), "models", provider.GetService<IMemoryCache>()));
 builder.Services.AddScoped<FirestoreRepository<Category>>(provider => new FirestoreRepository<Category>(provider.GetRequiredService<FirestoreDb>(), "categories", provider.GetService<IMemoryCache>()));
 builder.Services.AddScoped<FirestoreRepository<StatusMaster>>(provider => new FirestoreRepository<StatusMaster>(provider.GetRequiredService<FirestoreDb>(), "status_masters", provider.GetService<IMemoryCache>()));
@@ -118,6 +120,10 @@ builder.Services.AddScoped<IOcrService, BarcodeAndOcrService>();
 // PDF Service
 builder.Services.AddScoped<IPdfService, RmaReceiptPdfService>();
 
+// Firebase Metrics & Cost Dashboard Services
+builder.Services.AddSingleton<MetricsCollectorService>();
+builder.Services.AddHostedService<MetricsFlushBackgroundService>();
+
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -130,6 +136,8 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseCors("AllowBlazorWasm");
+
+app.UseMiddleware<RMA.Server.Middlewares.ApiMetricsMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

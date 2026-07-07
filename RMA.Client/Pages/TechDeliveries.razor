@@ -28,7 +28,7 @@
         <MudGrid>
             @foreach (var order in _orders)
             {
-                <MudItem xs="12" md="6" lg="4">
+                <MudItem xs="12" md="6" lg="4" @key="order.Id">
                     <MudPaper Elevation="3" Class="pa-6 rounded-xl position-relative h-100 d-flex flex-column justify-space-between" Style="@($"border-left: 6px solid {(order.Status == "Delivering" ? "#0072BC" : "#FFF200")};")">
                         <div>
                             <div class="d-flex justify-space-between align-center mb-3">
@@ -64,7 +64,7 @@
                             <MudText Typo="Typo.subtitle2" Class="fw-bold mb-1">Chi tiết sản phẩm:</MudText>
                             @foreach (var d in order.Details)
                             {
-                                <div class="d-flex justify-space-between align-center py-1">
+                                <div class="d-flex justify-space-between align-center py-1" @key="d.ModelName">
                                     <MudText Typo="Typo.caption" Style="max-width: 70%;" Class="text-truncate">@d.ModelName (@d.DeviceSpecs)</MudText>
                                     <MudText Typo="Typo.caption" Class="fw-bold">SL: @d.Quantity</MudText>
                                 </div>
@@ -108,7 +108,7 @@
     private bool _isLoadingOrders = false;
     private bool _pendingRefresh = false;
     private HubConnection? _hubConnection;
-    private readonly HashSet<string> _confirmedDeliveredIds = new();
+    private readonly Dictionary<string, DateTime> _confirmedDeliveredIds = new();
 
     protected override async Task OnInitializedAsync()
     {
@@ -118,6 +118,7 @@
 
         await LoadOrders();
 
+        var baseAddress = Http.BaseAddress?.ToString().TrimEnd('/');
         _hubConnection = new HubConnectionBuilder()
             .WithUrl(new Uri(Http.BaseAddress!, "salesHub"))
             .WithAutomaticReconnect()
@@ -127,6 +128,8 @@
         {
             await InvokeAsync(async () =>
             {
+                // Chờ Firestore cập nhật index / lan truyền dữ liệu
+                await Task.Delay(1500);
                 await LoadOrders();
             });
         });
@@ -159,6 +162,7 @@
 
         try
         {
+            _orders.Clear();
             var request = new HttpRequestMessage(HttpMethod.Get, "api/salesorders");
             request.Headers.CacheControl = new System.Net.Http.Headers.CacheControlHeaderValue
             {
@@ -169,14 +173,19 @@
             var response = await Http.SendAsync(request);
             var all = await response.Content.ReadFromJsonAsync<List<SalesOrderDto>>() ?? new List<SalesOrderDto>();
             
-            // Dọn dẹp các đơn hàng đã được server xác nhận là đã giao
-            var confirmedDelivered = all.Where(o => o.Status == "Delivered" && _confirmedDeliveredIds.Contains(o.Id)).Select(o => o.Id).ToList();
+            // Dọn dẹp các đơn hàng đã được server xác nhận là đã giao và đã lưu vết cục bộ quá 10 giây
+            var now = DateTime.UtcNow;
+            var confirmedDelivered = all.Where(o => o.Status == "Delivered" 
+                                                    && _confirmedDeliveredIds.TryGetValue(o.Id, out var addedTime) 
+                                                    && (now - addedTime).TotalSeconds > 10)
+                                        .Select(o => o.Id)
+                                        .ToList();
             foreach (var id in confirmedDelivered)
             {
                 _confirmedDeliveredIds.Remove(id);
             }
 
-            _orders = all.Where(o => (o.Status == "Pending" || o.Status == "Delivering") && !_confirmedDeliveredIds.Contains(o.Id))
+            _orders = all.Where(o => (o.Status == "Pending" || o.Status == "Delivering") && !_confirmedDeliveredIds.ContainsKey(o.Id))
                          .OrderBy(o => o.OrderDate)
                          .ToList();
         }
@@ -230,7 +239,7 @@
         if (result != null && !result.Canceled)
         {
             // ✅ OPTIMISTIC UPDATE: Đưa vào danh sách tombstone và xóa đơn khỏi danh sách hiển thị ngay lập tức
-            _confirmedDeliveredIds.Add(order.Id);
+            _confirmedDeliveredIds[order.Id] = DateTime.UtcNow;
             _orders.RemoveAll(o => o.Id == order.Id);
             await InvokeAsync(StateHasChanged);
 

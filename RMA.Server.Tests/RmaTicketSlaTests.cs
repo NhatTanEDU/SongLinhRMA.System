@@ -12,9 +12,10 @@ namespace RMA.Server.Tests
             // Arrange
             var utcNow = DateTime.UtcNow;
             var sentDate = utcNow.AddDays(-8);
+            var receivedDate = sentDate.AddDays(-1);
 
             // Act
-            var (warningColor, shouldSetUrgent) = SlaCalculator.Calculate(sentDate, utcNow);
+            var (warningColor, shouldSetUrgent) = SlaCalculator.Calculate(receivedDate, sentDate, "WaitingVendor", utcNow);
 
             // Assert
             Assert.Equal("Green", warningColor);
@@ -27,9 +28,10 @@ namespace RMA.Server.Tests
             // Arrange
             var utcNow = DateTime.UtcNow;
             var sentDate = utcNow.AddDays(-12);
+            var receivedDate = sentDate.AddDays(-1);
 
             // Act
-            var (warningColor, shouldSetUrgent) = SlaCalculator.Calculate(sentDate, utcNow);
+            var (warningColor, shouldSetUrgent) = SlaCalculator.Calculate(receivedDate, sentDate, "WaitingVendor", utcNow);
 
             // Assert
             Assert.Equal("Yellow", warningColor);
@@ -42,9 +44,10 @@ namespace RMA.Server.Tests
             // Arrange
             var utcNow = DateTime.UtcNow;
             var sentDate = utcNow.AddDays(-15);
+            var receivedDate = sentDate.AddDays(-1);
 
             // Act
-            var (warningColor, shouldSetUrgent) = SlaCalculator.Calculate(sentDate, utcNow);
+            var (warningColor, shouldSetUrgent) = SlaCalculator.Calculate(receivedDate, sentDate, "WaitingVendor", utcNow);
 
             // Assert
             Assert.Equal("Red", warningColor);

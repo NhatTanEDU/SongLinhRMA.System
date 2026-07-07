@@ -87,15 +87,66 @@ namespace RMA.Server.Controllers
         }
 
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<SalesOrderDto>>> Get()
+        public async Task<ActionResult<IEnumerable<SalesOrderDto>>> Get([FromQuery] SalesOrderQueryDto query)
         {
             try
             {
+                Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
                 var orders = await _orderRepo.GetAllAsync();
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
                 var devices = await _deviceRepo.GetAllAsync();
- 
+
+                // Apply CustomerId filter
+                if (!string.IsNullOrEmpty(query.CustomerId))
+                {
+                    orders = orders.Where(o => o.CustomerId == query.CustomerId).ToList();
+                }
+
+                // Apply Status filter
+                if (!string.IsNullOrEmpty(query.Status))
+                {
+                    orders = orders.Where(o => o.Status.Equals(query.Status, StringComparison.OrdinalIgnoreCase)).ToList();
+                }
+
+                // Apply Date filters
+                if (query.StartDate.HasValue)
+                {
+                    var start = DateTime.SpecifyKind(query.StartDate.Value.Date, DateTimeKind.Utc);
+                    orders = orders.Where(o => o.OrderDate >= start).ToList();
+                }
+                if (query.EndDate.HasValue)
+                {
+                    var end = DateTime.SpecifyKind(query.EndDate.Value.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
+                    orders = orders.Where(o => o.OrderDate <= end).ToList();
+                }
+
+                // Apply SearchTerm filter
+                if (!string.IsNullOrEmpty(query.SearchTerm))
+                {
+                    var matchingOrderIds = new HashSet<string>();
+                    foreach (var dev in devices)
+                    {
+                        if (!string.IsNullOrEmpty(dev.SerialNumber) && 
+                            dev.SerialNumber.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase) && 
+                            !string.IsNullOrEmpty(dev.OrderId))
+                        {
+                            matchingOrderIds.Add(dev.OrderId);
+                        }
+                    }
+
+                    orders = orders.Where(o => 
+                        (!string.IsNullOrEmpty(o.OrderCode) && o.OrderCode.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (customers.ContainsKey(o.CustomerId) && customers[o.CustomerId].Name.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(o.SalesNote) && o.SalesNote.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        (!string.IsNullOrEmpty(o.Note) && o.Note.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                        matchingOrderIds.Contains(o.Id) ||
+                        o.Details.Any(d => 
+                            (models.ContainsKey(d.ModelId) && models[d.ModelId].ModelName.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase)) ||
+                            (!string.IsNullOrEmpty(d.Note) && d.Note.Contains(query.SearchTerm, StringComparison.OrdinalIgnoreCase))
+                        )
+                    ).ToList();
+                }
                 var dtos = orders.Select(o => new SalesOrderDto
                 {
                     Id = o.Id,
@@ -107,6 +158,9 @@ namespace RMA.Server.Controllers
                     DeliveryDate = o.DeliveryDate,
                     Status = o.Status,
                     SalesNote = o.SalesNote,
+                    Note = o.Note,
+                    LastUpdated = o.LastUpdated,
+                    UpdatedBy = o.UpdatedBy,
                     Details = o.Details.Select(d => new OrderDetailDto
                     {
                         ModelId = d.ModelId,
@@ -136,6 +190,7 @@ namespace RMA.Server.Controllers
         {
             try
             {
+                Response.Headers.Append("Cache-Control", "no-cache, no-store, must-revalidate");
                 var orders = await _orderRepo.GetByFieldAsync("Status", "Pending");
                 var customers = (await _customerRepo.GetAllAsync()).ToDictionary(c => c.Id, c => c);
                 var models = await GetAndFixModelsAsync();
@@ -152,6 +207,9 @@ namespace RMA.Server.Controllers
                     DeliveryDate = o.DeliveryDate,
                     Status = o.Status,
                     SalesNote = o.SalesNote,
+                    Note = o.Note,
+                    LastUpdated = o.LastUpdated,
+                    UpdatedBy = o.UpdatedBy,
                     Details = o.Details.Select(d => new OrderDetailDto
                     {
                         ModelId = d.ModelId,
@@ -209,6 +267,31 @@ namespace RMA.Server.Controllers
                 await _orderRepo.UpdateAsync(id, order);
                 await _hubContext.Clients.All.SendAsync("OrderStateChanged");
                 return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
+        }
+
+        [HttpPut("{id}/business-info")]
+        public async Task<IActionResult> UpdateBusinessInfo(string id, [FromBody] SalesOrderBusinessInfoDto dto)
+        {
+            if (dto == null) return BadRequest("Yêu cầu không hợp lệ.");
+
+            try
+            {
+                var order = await _orderRepo.GetByIdAsync(id);
+                if (order == null) return NotFound("Order not found");
+
+                order.OrderCode = dto.OrderCode;
+                order.Note = dto.Note;
+                order.LastUpdated = DateTime.SpecifyKind(DateTime.UtcNow, DateTimeKind.Utc);
+                order.UpdatedBy = User.Identity?.Name ?? "Unknown";
+
+                await _orderRepo.UpdateAsync(id, order);
+                await _hubContext.Clients.All.SendAsync("OrderStateChanged");
+                return Ok();
             }
             catch (Exception ex)
             {
@@ -295,9 +378,13 @@ namespace RMA.Server.Controllers
             try
             {
                 var order = await _orderRepo.GetByIdAsync(dto.OrderId);
-                if (order == null || (order.Status != "Pending" && order.Status != "Delivering"))
+                if (order == null)
                 {
-                    return BadRequest("Đơn hàng không tồn tại hoặc không ở trạng thái hợp lệ để xác nhận giao hàng (phải là Pending hoặc Delivering).");
+                    return BadRequest("Đơn hàng không tồn tại.");
+                }
+                if (order.Status != "Pending" && order.Status != "Delivering")
+                {
+                    return BadRequest("Đơn hàng đã được xác nhận giao thành công trước đó, vui lòng tải lại trang!");
                 }
 
                 if (dto.SerialNumbersByModel != null)
